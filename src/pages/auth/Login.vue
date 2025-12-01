@@ -1,7 +1,7 @@
 <script setup>
-
 import HomeLayout from '@/layouts/AuthLayout.vue'
 import { ref } from 'vue'
+import MicrosoftIcon from '@/components/icons/MicrosoftIcon.vue'
 
 const email = ref('')
 const password = ref('')
@@ -9,7 +9,7 @@ const password = ref('')
 const handleLogin = () => {
     console.log('Login submitted:', {
         email: email.value,
-        password: password.value
+        password: password.value,
     })
     // Add your login logic here
 }
@@ -22,27 +22,20 @@ const handleMicrosoftLogin = () => {
 
 <template>
     <HomeLayout>
-
         <!-- Right Side - Login Form -->
-        <div class="flex flex-col gap-4 p-6 md:p-10 bg-white">
+        <div class="flex flex-col gap-4 p-6 md:p-10 bg-slate-100">
             <div class="flex flex-1 items-center justify-center">
                 <div class="w-full max-w-xs">
                     <div class="flex flex-col gap-6">
                         <!-- Header -->
                         <div class="flex flex-col items-center gap-1 text-center">
-                            <h1 class="text-2xl font-bold text-gray-900">
-                                Login to your account
-                            </h1>
-                            <p class="text-sm text-gray-600">
-                                Enter your email below to login to your account
-                            </p>
+                            <h1 class="text-2xl font-bold text-gray-900">Login to your account</h1>
+                            <p class="text-sm text-gray-600">Enter your email below to login to your account</p>
                         </div>
 
                         <!-- Email Field -->
                         <div class="flex flex-col gap-2">
-                            <label for="email" class="text-sm font-medium text-gray-900">
-                                Email
-                            </label>
+                            <label for="email" class="text-sm font-medium text-gray-900">Email</label>
                             <input id="email" v-model="email" type="email" placeholder="m@example.com"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                                 required />
@@ -51,12 +44,9 @@ const handleMicrosoftLogin = () => {
                         <!-- Password Field -->
                         <div class="flex flex-col gap-2">
                             <div class="flex items-center justify-between">
-                                <label for="password" class="text-sm font-medium text-gray-900">
-                                    Password
-                                </label>
-                                <a href="#" class="text-sm text-gray-900 underline-offset-4 hover:underline">
-                                    Forgot your password?
-                                </a>
+                                <label for="password" class="text-sm font-medium text-gray-900">Password</label>
+                                <a href="#" class="text-sm text-gray-900 underline-offset-4 hover:underline">Forgot your
+                                    password?</a>
                             </div>
                             <input id="password" v-model="password" type="password"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
@@ -64,10 +54,12 @@ const handleMicrosoftLogin = () => {
                         </div>
 
                         <!-- Login Button -->
-                        <button @click="handleLogin"
-                            class="w-full px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2">
-                            Login
-                        </button>
+                        <router-link to="/dashboard">
+                            <button @click="handleLogin"
+                                class="w-full px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2">
+                                Login
+                            </button>
+                        </router-link>
 
                         <!-- Separator -->
                         <div class="relative">
@@ -75,33 +67,23 @@ const handleMicrosoftLogin = () => {
                                 <div class="w-full border-t border-gray-300"></div>
                             </div>
                             <div class="relative flex justify-center text-xs">
-                                <span class="bg-white px-2 text-gray-500">
-                                    Or continue with
-                                </span>
+                                <span class="bg-white px-2 text-gray-500">Or continue with</span>
                             </div>
                         </div>
 
-                        <!-- GitHub Button -->
+                        <!-- Microsoft Button -->
                         <div class="flex flex-col gap-2">
                             <button type="button" @click="handleMicrosoftLogin"
                                 class="w-full px-4 py-2 border border-gray-300 bg-white text-gray-900 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 flex items-center justify-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4"
-                                    aria-hidden="true">
-                                    <title>Microsoft</title>
-                                    <!-- Four-color Microsoft icon (4 squares) -->
-                                    <rect x="1" y="1" width="10" height="10" rx="1" fill="#00A4EF" />
-                                    <rect x="13" y="1" width="10" height="10" rx="1" fill="#7FBA00" />
-                                    <rect x="1" y="13" width="10" height="10" rx="1" fill="#FFB900" />
-                                    <rect x="13" y="13" width="10" height="10" rx="1" fill="#F35325" />
-                                </svg>
+                                <MicrosoftIcon />
                                 Login with Microsoft
                             </button>
 
                             <p class="text-center text-xs text-gray-600">
                                 Don't have an account?
-                                <router-link to="/register" class="underline underline-offset-4 text-gray-900 hover:text-gray-900 hover:font-bold">
-                                    Sign up
-                                </router-link>
+                                <router-link to="/register"
+                                    class="underline underline-offset-4 text-gray-900 hover:text-gray-900 hover:font-bold">Sign
+                                    up</router-link>
                             </p>
                         </div>
                     </div>
