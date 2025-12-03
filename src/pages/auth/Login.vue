@@ -36,7 +36,7 @@ const handleMicrosoftLogin = () => {
                         <!-- Email Field -->
                         <div class="flex flex-col gap-2">
                             <label for="email" class="text-sm font-medium text-gray-900">Email</label>
-                            <input id="email" v-model="email" type="email" placeholder="m@example.com"
+                            <input id="email" v-model="email" type="email" placeholder="m@nanopass.com"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                                 required />
                         </div>
