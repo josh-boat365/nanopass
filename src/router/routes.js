@@ -14,8 +14,7 @@ import CreateSystemPasswordPolicyCategory from "@/pages/system-setup/CreateSyste
 import CreateSystemPassword from "@/pages/system-setup/Index.vue";
 
 const routes = createRouter({
-  history: createWebHistory(
-    import.meta.env.BASE_URL),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [{
       path: "/",
       component: Login
