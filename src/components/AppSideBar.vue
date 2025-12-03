@@ -1,100 +1,136 @@
 <!-- AppSidebar.vue -->
+
 <script setup>
 import {
     Frame,
     Settings2,
     LayoutDashboard,
+    Users2,
+    SettingsIcon,
 } from 'lucide-vue-next'
-import { ref } from 'vue'
-import NavMain from '../components/NavMain.vue'
-import NavProjects from '../components/NavProjects.vue'
-import NavUser from '../components/NavUser.vue'
-import AppLogo from './AppLogo.vue'
+import { useRoute } from 'vue-router'
+import NavMain from '@/components/NavMain.vue'
+// import NavProjects from '@/components/NavProjects.vue'
+import NavUser from '@/components/NavUser.vue'
+import AppLogo from '@/components/AppLogo.vue'
 
-const isCollapsed = ref(false)
+const route = useRoute()
+
+defineProps({
+    isCollapsed: { type: Boolean, default: false },
+    isMobileOpen: { type: Boolean, default: false }
+})
 
 const data = {
     user: {
-        name: 'NanoPass',
-        email: 'm@nanopass.com',
-        avatar: '/avatars/shadcn.jpg',
+        name: 'Jnboateng',
+        email: 'jnboateng@bestpointgh.com',
+        avatar: '../assets/icons/codesandbox.svg',
     },
     navMain: [
         {
             title: 'Dashboard',
             url: '/dashboard',
             icon: LayoutDashboard,
-            isActive: true,
             items: [
                 {
-                    title: 'History',
-                    url: '#',
+                    title: 'Overview',
+                    url: '/dashboard',
                 },
                 {
-                    title: 'Starred',
-                    url: '#',
+                    title: 'Access Trails',
+                    url: '/dashboard/auth-trails',
                 },
                 {
-                    title: 'Settings',
-                    url: '#',
+                    title: 'My Dashboard',
+                    url: '/user/dashboard',
                 },
             ],
         },
         {
-            title: 'Settings',
+            title: 'User Management',
+            url: '#',
+            icon: Users2,
+            items: [
+                {
+                    title: 'Users',
+                    url: '/dashboard/create-user',
+                }
+            ],
+        },
+        {
+            title: 'App Configs',
             url: '#',
             icon: Settings2,
             items: [
                 {
-                    title: 'General',
-                    url: '#',
+                    title: 'Create System User Privileges',
+                    url: '/dashboard/create-privileges',
                 },
                 {
-                    title: 'Team',
-                    url: '#',
+                    title: 'Create System Passwords Category',
+                    url: '/dashboard/create-system-passwords-category',
                 },
                 {
-                    title: 'Billing',
-                    url: '#',
+                    title: 'Create System Passwords Policy Category',
+                    url: '/dashboard/create-system-passwords-policy-category',
                 },
                 {
-                    title: 'Limits',
-                    url: '#',
+                    title: 'Create System Passwords',
+                    url: '/dashboard/create-system-passwords',
                 },
             ],
         },
+        // {
+        //     title: 'Settings',
+        //     url: '/dashboard/settings',
+        //     icon: SettingsIcon,
+        //     items: [],
+        // },
+
     ],
-    projects: [
-        {
-            name: 'Design Engineering',
-            url: '#',
-            icon: Frame,
-        },
-    ],
+    // projects: [
+    //     {
+    //         name: 'Design Engineering',
+    //         url: '#',
+    //         icon: Frame,
+    //     },
+    // ],
 }
 </script>
 
 <template>
     <aside :class="[
-        'flex h-screen flex-col border-r bg-slate-100 transition-all duration-300',
-        isCollapsed ? 'w-16' : 'w-64'
+        // base
+        'relative flex flex-col border-r bg-white',
+        // animate width only so child content can animate separately
+        'transition-[width] duration-300 ease-in-out',
+        // width when collapsed or expanded
+        isCollapsed ? 'w-16' : 'w-64',
+        // layout behavior: hidden on small screens unless mobile open; visible on md+
+        isMobileOpen ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden md:flex',
+        // full height for overlay mode
+        isMobileOpen ? 'h-full' : 'h-screen'
     ]">
         <!-- Header -->
         <div class="border-b p-4 border-gray-200">
-            <button class="flex w-full items-center gap-3 rounded-md">
-                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white">
+            <button :class="[
+                'flex items-center gap-3 rounded-md transition-all duration-300',
+                isCollapsed ? 'justify-center' : 'w-full'
+            ]">
+                <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-black text-white">
                     <AppLogo class="h-4 w-4" />
                 </div>
-                <div v-if="!isCollapsed" class="flex-1 text-left text-sm">
+                <div v-show="!isCollapsed" class="flex-1 text-left text-sm transition-all duration-300">
                     <div class="font-medium text-gray-900">NanoPass</div>
                 </div>
             </button>
         </div>
 
         <!-- Content -->
-        <div class="flex-1 overflow-y-auto">
-            <NavMain :items="data.navMain" :is-collapsed="isCollapsed" />
-            <NavProjects v-if="!isCollapsed" :projects="data.projects" />
+        <div class="relative flex-1 overflow-y-auto">
+            <NavMain :items="data.navMain" :is-collapsed="isCollapsed" :current-route="route.path" />
+            <!-- <NavProjects v-if="!isCollapsed" :projects="data.projects" /> -->
         </div>
 
         <!-- Footer -->
