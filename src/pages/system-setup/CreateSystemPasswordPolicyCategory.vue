@@ -43,6 +43,7 @@ const formData = ref({
     categoryId: '',
     name: '',
     regex: '',
+    description: '',
     expirationDays: '',
 })
 
@@ -57,6 +58,7 @@ const updateFilteredPolicies = () => {
     filteredPolicies.value = passwordPolicies.value.filter(policy =>
         policy.name.toLowerCase().includes(query) ||
         policy.categoryName.toLowerCase().includes(query) ||
+        policy.description.toLowerCase().includes(query) ||
         policy.regex.toLowerCase().includes(query)
     )
 }
@@ -69,14 +71,14 @@ const getCategoryName = (categoryId) => {
 
 // Open Add Modal
 const openAddModal = () => {
-    formData.value = { categoryId: '', name: '', regex: '', expirationDays: '' }
+    formData.value = { categoryId: '', name: '', regex: '', description: '', expirationDays: '' }
     showAddModal.value = true
 }
 
 // Close Add Modal
 const closeAddModal = () => {
     showAddModal.value = false
-    formData.value = { categoryId: '', name: '', regex: '', expirationDays: '' }
+    formData.value = { categoryId: '', name: '', regex: '', description: '', expirationDays: '' }
 }
 
 // Open Edit Modal
@@ -86,6 +88,7 @@ const openEditModal = (policy) => {
         categoryId: policy.categoryId,
         name: policy.name,
         regex: policy.regex,
+        description: policy.description,
         expirationDays: policy.expirationDays
     }
     showEditModal.value = true
@@ -95,7 +98,7 @@ const openEditModal = (policy) => {
 const closeEditModal = () => {
     showEditModal.value = false
     selectedPolicy.value = null
-    formData.value = { categoryId: '', name: '', regex: '', expirationDays: '' }
+    formData.value = { categoryId: '', name: '', regex: '', description: '', expirationDays: '' }
 }
 
 // Open Delete Modal
@@ -112,7 +115,7 @@ const closeDeleteModal = () => {
 
 // Add Password Policy
 const addPasswordPolicy = () => {
-    if (formData.value.categoryId && formData.value.name.trim() && formData.value.regex.trim() && formData.value.expirationDays) {
+    if (formData.value.categoryId && formData.value.name.trim() && formData.value.regex.trim() && formData.value.description.trim() && formData.value.expirationDays) {
         const categoryName = getCategoryName(parseInt(formData.value.categoryId))
         passwordPolicies.value.push({
             id: Math.max(...passwordPolicies.value.map(p => p.id), 0) + 1,
@@ -120,6 +123,7 @@ const addPasswordPolicy = () => {
             categoryName: categoryName,
             name: formData.value.name,
             regex: formData.value.regex,
+            description: formData.value.description,
             expirationDays: parseInt(formData.value.expirationDays),
         })
         updateFilteredPolicies()
@@ -129,7 +133,7 @@ const addPasswordPolicy = () => {
 
 // Update Password Policy
 const updatePasswordPolicy = () => {
-    if (formData.value.categoryId && formData.value.name.trim() && formData.value.regex.trim() && formData.value.expirationDays && selectedPolicy.value) {
+    if (formData.value.categoryId && formData.value.name.trim() && formData.value.regex.trim() && formData.value.description.trim() && formData.value.expirationDays && selectedPolicy.value) {
         const index = passwordPolicies.value.findIndex(p => p.id === selectedPolicy.value.id)
         if (index > -1) {
             const categoryName = getCategoryName(parseInt(formData.value.categoryId))
@@ -137,6 +141,7 @@ const updatePasswordPolicy = () => {
             passwordPolicies.value[index].categoryName = categoryName
             passwordPolicies.value[index].name = formData.value.name
             passwordPolicies.value[index].regex = formData.value.regex
+            passwordPolicies.value[index].description = formData.value.description
             passwordPolicies.value[index].expirationDays = parseInt(formData.value.expirationDays)
         }
         closeEditModal()
@@ -222,8 +227,9 @@ updateFilteredPolicies()
                                 <td class="px-6 py-4 text-sm font-medium text-gray-900">
                                     {{ policy.name }}
                                 </td>
-                                <td class="px-6 py-4 text-sm text-gray-600 font-mono text-xs max-w-xs truncate">
-                                    {{ policy.regex }}
+                                <td class="px-6 py-4 text-gray-600 font-mono text-xs max-w-lg text-wrap">
+                                    <p>{{ policy.regex }}</p>
+                                    <p class="text-xs font-bold text-gray-500 mt-1">{{ policy.description }}</p>
                                 </td>
                                 <td class="px-6 py-4 text-sm font-medium text-gray-900">
                                     {{ policy.expirationDays }} days
@@ -288,8 +294,16 @@ updateFilteredPolicies()
                             Pattern</label>
                         <textarea id="add-regex" v-model="formData.regex" rows="4"
                             placeholder="e.g., ^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent font-mono text-xs"></textarea>
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent font-mono"></textarea>
                         <p class="text-xs text-gray-500 mt-1">Enter a regular expression for password validation</p>
+                    </div>
+                    <div>
+                        <label for="add-description" class="block text-sm font-medium text-gray-900 mb-1">Description For Regex
+                            Pattern</label>
+                        <textarea id="add-regex" v-model="formData.description" rows="4"
+                            placeholder="e.g., Minimum 8 characters with letters and numbers"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent font-mono"></textarea>
+                        <p class="text-xs text-gray-500 mt-1">Enter description for regular expression </p>
                     </div>
                     <div>
                         <label for="add-expiration" class="block text-sm font-medium text-gray-900 mb-1">Password
@@ -347,8 +361,16 @@ updateFilteredPolicies()
                             Pattern</label>
                         <textarea id="edit-regex" v-model="formData.regex" rows="4"
                             placeholder="e.g., ^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent font-mono text-xs"></textarea>
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent font-mono "></textarea>
                         <p class="text-xs text-gray-500 mt-1">Enter a regular expression for password validation</p>
+                    </div>
+                    <div>
+                        <label for="edit-description" class="block text-sm font-medium text-gray-900 mb-1">Description For Regex
+                            Pattern</label>
+                        <textarea id="edit-description" v-model="formData.description" rows="4"
+                            placeholder="e.g., Minimum 8 characters with letters and numbers"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent font-mono "></textarea>
+                        <p class="text-xs text-gray-500 mt-1">Enter description for regular expression</p>
                     </div>
                     <div>
                         <label for="edit-expiration" class="block text-sm font-medium text-gray-900 mb-1">Password
