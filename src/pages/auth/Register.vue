@@ -3,8 +3,7 @@ import HomeLayout from '@/layouts/AuthLayout.vue'
 import { ref, computed } from 'vue'
 import MicrosoftIcon from '@/components/icons/MicrosoftIcon.vue'
 
-const firstName = ref('')
-const lastName = ref('')
+const username = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
@@ -23,8 +22,7 @@ const handleRegister = () => {
     }
 
     console.log('Register submitted:', {
-        firstName: firstName.value,
-        lastName: lastName.value,
+        username: username.value,
         email: email.value,
         password: password.value
     })
@@ -56,32 +54,23 @@ const handleMicrosoftRegister = () => {
                             </p>
                         </div>
 
-                        <!-- First Name Field -->
+                        <!-- Username Field -->
                         <div class="flex flex-col gap-2">
-                            <label for="firstName" class="text-sm font-medium text-gray-900">
-                                First Name
+                            <label for="username" class="text-sm font-medium text-gray-900">
+                                Username
                             </label>
-                            <input id="firstName" v-model="firstName" type="text" placeholder="John"
+                            <input id="username" v-model="username" type="text" placeholder="jnboateng"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                                 required />
                         </div>
 
-                        <!-- Last Name Field -->
-                        <div class="flex flex-col gap-2">
-                            <label for="lastName" class="text-sm font-medium text-gray-900">
-                                Last Name
-                            </label>
-                            <input id="lastName" v-model="lastName" type="text" placeholder="Doe"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                                required />
-                        </div>
 
                         <!-- Email Field -->
                         <div class="flex flex-col gap-2">
                             <label for="email" class="text-sm font-medium text-gray-900">
                                 Email
                             </label>
-                            <input id="email" v-model="email" type="email" placeholder="m@example.com"
+                            <input id="email" v-model="email" type="email" placeholder="jnboateng@bestpointgh.com"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                                 required />
                         </div>
