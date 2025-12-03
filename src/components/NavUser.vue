@@ -1,14 +1,12 @@
 <!-- NavUser.vue -->
 <script setup>
 import {
-    BadgeCheck,
     Bell,
     ChevronsUpDown,
-    CreditCard,
+    Settings,
     LogOut,
-    Sparkles,
 } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 defineProps({
     user: Object,
@@ -16,26 +14,54 @@ defineProps({
 })
 
 const showDropdown = ref(false)
+const dropdownContainer = ref(null)
+
+const closeDropdown = () => {
+    showDropdown.value = false
+}
+
+const handleClickOutside = (event) => {
+    if (dropdownContainer.value && !dropdownContainer.value.contains(event.target)) {
+        closeDropdown()
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <template>
-    <div class="relative">
+    <div ref="dropdownContainer" class="relative">
         <button @click="showDropdown = !showDropdown" :class="[
-            'flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50',
+            'group relative flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50',
             isCollapsed ? 'justify-center' : ''
-        ]">
+        ]" :aria-label="user.name">
             <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-200 text-sm font-semibold">
                 {{ user.name.substring(0, 2).toUpperCase() }}
             </div>
-            <div v-if="!isCollapsed" class="flex-1 text-left text-sm">
+            <div v-show="!isCollapsed" class="flex-1 text-left text-sm transition-all duration-200">
                 <div class="font-medium text-gray-900">{{ user.name }}</div>
                 <div class="text-xs text-gray-500">{{ user.email }}</div>
             </div>
-            <ChevronsUpDown v-if="!isCollapsed" class="h-4 w-4 text-gray-500" />
+            <ChevronsUpDown v-show="!isCollapsed" class="h-4 w-4 text-gray-500" />
+
+            <!-- Tooltip for collapsed user button -->
+            <span v-if="isCollapsed" role="tooltip"
+                class="pointer-events-none absolute left-full top-1/2 z-50 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white shadow-lg group-hover:block group-focus:block">
+                {{ user.name }}
+            </span>
         </button>
 
         <!-- Dropdown menu -->
-        <div v-if="showDropdown" class="absolute bottom-full left-0 mb-2 w-56 rounded-lg border bg-white shadow-lg">
+        <div v-if="showDropdown" :class="[
+            'absolute z-50 mb-2 w-56 rounded-lg border bg-white shadow-lg',
+            isCollapsed ? 'bottom-full left-16' : 'bottom-full left-0'
+        ]">
             <div class="flex items-center gap-2 border-b px-3 py-2">
                 <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-200 text-sm font-semibold">
                     {{ user.name.substring(0, 2).toUpperCase() }}
@@ -46,22 +72,20 @@ const showDropdown = ref(false)
                 </div>
             </div>
 
-            <div class="border-b py-1">
+            <!-- <div class="border-b py-1">
                 <button class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50">
                     <Sparkles class="h-4 w-4" />
                     <span>Upgrade to Pro</span>
                 </button>
-            </div>
+            </div> -->
 
             <div class="border-b py-1">
-                <button class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50">
-                    <BadgeCheck class="h-4 w-4" />
-                    <span>Account</span>
-                </button>
-                <button class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50">
-                    <CreditCard class="h-4 w-4" />
-                    <span>Billing</span>
-                </button>
+                <router-link to="/dashboard/settings" @click="closeDropdown">
+                    <button class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50">
+                        <Settings class="h-4 w-4" />
+                        <span>Settings</span>
+                    </button>
+                </router-link>
                 <button class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50">
                     <Bell class="h-4 w-4" />
                     <span>Notifications</span>
@@ -69,10 +93,12 @@ const showDropdown = ref(false)
             </div>
 
             <div class="py-1">
-                <button class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50">
-                    <LogOut class="h-4 w-4" />
-                    <span>Log out</span>
-                </button>
+                <router-link to="/login" @click="closeDropdown">
+                    <button class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50">
+                        <LogOut class="h-4 w-4" />
+                        <span>Log out</span>
+                    </button>
+                </router-link>
             </div>
         </div>
     </div>
