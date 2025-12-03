@@ -24,7 +24,7 @@ defineProps({
 const data = {
     user: {
         name: 'Jnboateng',
-        email: 'jnboateng@bestpointgh.com',
+        email: 'jnboateng@nanopass.com',
         avatar: '../assets/icons/codesandbox.svg',
     },
     navMain: [
