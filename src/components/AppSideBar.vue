@@ -35,11 +35,11 @@ const data = {
             items: [
                 {
                     title: 'Overview',
-                    url: '/dashboard',
+                    url: '/admin/dashboard',
                 },
                 {
                     title: 'Access Trails',
-                    url: '/dashboard/auth-trails',
+                    url: '/admin/dashboard/auth-trails',
                 },
                 {
                     title: 'My Dashboard',
@@ -54,7 +54,7 @@ const data = {
             items: [
                 {
                     title: 'Users',
-                    url: '/dashboard/create-user',
+                    url: '/admin/dashboard/create-user',
                 }
             ],
         },
@@ -65,19 +65,19 @@ const data = {
             items: [
                 {
                     title: 'Create System User Privileges',
-                    url: '/dashboard/create-privileges',
+                    url: '/admin/dashboard/create-privileges',
                 },
                 {
                     title: 'Create System Passwords Category',
-                    url: '/dashboard/create-system-passwords-category',
+                    url: '/admin/dashboard/create-system-passwords-category',
                 },
                 {
                     title: 'Create System Passwords Policy Category',
-                    url: '/dashboard/create-system-passwords-policy-category',
+                    url: '/admin/dashboard/create-system-passwords-policy-category',
                 },
                 {
                     title: 'Create System Passwords',
-                    url: '/dashboard/create-system-passwords',
+                    url: '/admin/dashboard/create-system-passwords',
                 },
             ],
         },
