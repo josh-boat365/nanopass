@@ -23,7 +23,7 @@ const handleMicrosoftLogin = () => {
 <template>
     <HomeLayout>
         <!-- Right Side - Login Form -->
-        <div class="flex flex-col gap-4 p-6 md:p-10 bg-slate-100">
+        <div class="flex flex-col gap-4 p-6 md:p-10 bg-white">
             <div class="flex flex-1 items-center justify-center">
                 <div class="w-full max-w-xs">
                     <div class="flex flex-col gap-6">
