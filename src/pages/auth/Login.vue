@@ -54,7 +54,7 @@ const handleMicrosoftLogin = () => {
                         </div>
 
                         <!-- Login Button -->
-                        <router-link to="/dashboard">
+                        <router-link to="/admin/dashboard">
                             <button @click="handleLogin"
                                 class="w-full px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2">
                                 Login
