@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppSidebar from "@/components/AppSideBar.vue";
 import AppHeader from "@/components/AppHeader.vue";
+import AppFooter from "../components/AppFooter.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -59,7 +60,19 @@ const breadcrumbs = computed(() => {
         path: "/admin/dashboard/create-system-passwords",
       },
     ],
-    "/user/dashboard": [{ label: "My Dashboard", path: "/user/dashboard" }],
+    "/user/dashboard": [
+      { label: "My Dashboard", path: "/user/dashboard" },
+    ],
+    "/user/assigned-keys": [
+      { label: "My Dashboard", path: "/user/dashboard" },
+      { label: "My Dashboard2", path: "/user/dashboard2" },
+      { label: "Assigned Keys", path: "/user/assigned-keys" },
+    ],
+    "/user/personal-keys": [
+      { label: "My Dashboard", path: "/user/dashboard" },
+      { label: "My Dashboard2", path: "/user/dashboard2" },
+      { label: "Personal Keys", path: "/user/personal-keys" },
+    ],
   };
 
   return (
@@ -102,6 +115,9 @@ const toggleSidebar = () => {
       <main class="flex-1 overflow-y-auto bg-gray-50 p-4">
         <slot />
       </main>
+
+       <!-- Footer  -->
+        <AppFooter />
     </div>
   </div>
 </template>
