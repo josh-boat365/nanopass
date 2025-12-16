@@ -1,710 +1,581 @@
 <script setup>
 import BaseLayout from "@/layouts/AppLayout.vue";
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import {
-  Eye,
-  Trash2,
-  Edit,
-  Lock,
-  X,
-  CheckCircle,
-  AlertCircle,
+  Key,
   Clock,
+  AlertTriangle,
+  CheckCircle,
+  TrendingUp,
+  Shield,
+  Users,
+  Calendar,
+  ChevronRight,
+  AlertCircle,
 } from "lucide-vue-next";
+import { useRouter } from "vue-router";
 
-const activeTab = ref("system");
-const showPasswordModal = ref(false);
-const showDeleteModal = ref(false);
-const selectedPassword = ref(null);
-const accountPassword = ref("");
-const passwordError = ref("");
-const revealedPassword = ref(null);
+const router = useRouter();
 
-// Sample system passwords data
-const systemPasswords = ref([
-  {
-    id: 1,
-    systemName: "Main Production Server",
-    password: "P@ssw0rd123!Secure",
-    duration: 90,
-    daysLeft: 15,
-    privilege: "Admin",
-    policy: "Strong",
-    status: "warning",
-  },
-  {
-    id: 2,
-    systemName: "Database Primary",
-    password: "DbS3cur3#2024",
-    duration: 60,
-    daysLeft: 45,
-    privilege: "Editor",
-    policy: "Strong",
-    status: "healthy",
-  },
-  {
-    id: 3,
-    systemName: "Development Environment",
-    password: "DevPass456",
-    duration: 30,
-    daysLeft: 3,
-    privilege: "Viewer",
-    policy: "Basic",
-    status: "critical",
-  },
-  {
-    id: 4,
-    systemName: "Staging Server",
-    password: "St@g1ng!Env2024",
-    duration: 90,
-    daysLeft: 60,
-    privilege: "Editor",
-    policy: "Enterprise",
-    status: "healthy",
-  },
-]);
+// User data
+const userData = ref({
+  name: "John Doe",
+  email: "john.doe@company.com",
+  role: "Senior Developer",
+});
 
-// Sample personal passwords data
-const personalPasswords = ref([
+// Personal keys data
+const personalKeys = ref([
   {
     id: 1,
     systemName: "GitHub Account",
+    description: "Personal GitHub repository access",
     password: "MyGitH@b2024!",
     duration: 180,
     daysLeft: 120,
-    privilege: "Owner",
-    policy: "Strong",
     status: "healthy",
+    createdAt: "2024-08-10",
   },
   {
     id: 2,
     systemName: "AWS Console",
+    description: "AWS management console login",
     password: "AwsC0ns0le#Secure",
     duration: 90,
     daysLeft: 25,
-    privilege: "Admin",
-    policy: "Enterprise",
     status: "warning",
+    createdAt: "2024-09-15",
   },
   {
     id: 3,
     systemName: "Email Account",
+    description: "Personal email access credentials",
     password: "Em@il123Pass",
     duration: 365,
     daysLeft: 200,
-    privilege: "Owner",
-    policy: "Strong",
     status: "healthy",
+    createdAt: "2024-06-01",
+  },
+  {
+    id: 4,
+    systemName: "LinkedIn Profile",
+    description: "LinkedIn professional account",
+    password: "Link3dIn!2024",
+    duration: 180,
+    daysLeft: 5,
+    status: "critical",
+    createdAt: "2024-06-20",
   },
 ]);
 
-const privilegeColors = {
-  Admin: "bg-red-100 text-red-800",
-  Editor: "bg-blue-100 text-blue-800",
-  Viewer: "bg-gray-100 text-gray-800",
-  Owner: "bg-purple-100 text-purple-800",
+// Assigned keys data (keys assigned to the user by admin/organization)
+const assignedKeys = ref([
+  {
+    id: 1,
+    systemName: "Production Database",
+    description: "Main production PostgreSQL database",
+    assignedBy: "IT Admin",
+    duration: 90,
+    daysLeft: 15,
+    status: "warning",
+    assignedAt: "2024-09-18",
+    expiresAt: "2024-12-31",
+  },
+  {
+    id: 2,
+    systemName: "Jenkins CI/CD",
+    description: "Continuous integration server access",
+    assignedBy: "DevOps Team",
+    duration: 180,
+    daysLeft: 2,
+    status: "critical",
+    assignedAt: "2024-06-20",
+    expiresAt: "2024-12-18",
+  },
+  {
+    id: 3,
+    systemName: "Jira Admin Panel",
+    description: "Project management admin access",
+    assignedBy: "Project Manager",
+    duration: 365,
+    daysLeft: 150,
+    status: "healthy",
+    assignedAt: "2024-06-01",
+    expiresAt: "2025-05-15",
+  },
+  {
+    id: 4,
+    systemName: "AWS IAM Role",
+    description: "AWS infrastructure management",
+    assignedBy: "Cloud Team",
+    duration: 90,
+    daysLeft: 45,
+    status: "healthy",
+    assignedAt: "2024-11-01",
+    expiresAt: "2025-01-30",
+  },
+  {
+    id: 5,
+    systemName: "Slack Workspace Admin",
+    description: "Company Slack administrative access",
+    assignedBy: "HR Department",
+    duration: 180,
+    daysLeft: 8,
+    status: "critical",
+    assignedAt: "2024-06-20",
+    expiresAt: "2024-12-24",
+  },
+]);
+
+// Computed statistics
+const stats = computed(() => {
+  const totalKeys = personalKeys.value.length + assignedKeys.value.length;
+  const criticalKeys = [
+    ...personalKeys.value,
+    ...assignedKeys.value,
+  ].filter((k) => k.status === "critical").length;
+  const warningKeys = [
+    ...personalKeys.value,
+    ...assignedKeys.value,
+  ].filter((k) => k.status === "warning").length;
+  const healthyKeys = [
+    ...personalKeys.value,
+    ...assignedKeys.value,
+  ].filter((k) => k.status === "healthy").length;
+
+  return {
+    total: totalKeys,
+    critical: criticalKeys,
+    warning: warningKeys,
+    healthy: healthyKeys,
+  };
+});
+
+// Get keys expiring soon (next 30 days)
+const keysExpiringSoon = computed(() => {
+  const allKeys = [
+    ...personalKeys.value.map((k) => ({ ...k, type: "personal" })),
+    ...assignedKeys.value.map((k) => ({ ...k, type: "assigned" })),
+  ];
+
+  return allKeys
+    .filter((k) => k.daysLeft <= 30)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+    .slice(0, 5);
+});
+
+// Recent activity
+const recentActivity = computed(() => {
+  const allKeys = [
+    ...personalKeys.value.map((k) => ({ ...k, type: "personal" })),
+    ...assignedKeys.value.map((k) => ({ ...k, type: "assigned" })),
+  ];
+
+  return allKeys
+    .sort((a, b) => new Date(b.createdAt || b.assignedAt) - new Date(a.createdAt || a.assignedAt))
+    .slice(0, 4);
+});
+
+const getStatusColor = (status) => {
+  const colors = {
+    critical: "text-red-600 bg-red-50",
+    warning: "text-yellow-600 bg-yellow-50",
+    healthy: "text-green-600 bg-green-50",
+  };
+  return colors[status] || colors.healthy;
 };
 
-const policyColors = {
-  Enterprise: "bg-green-100 text-green-800",
-  Strong: "bg-blue-100 text-blue-800",
-  Basic: "bg-yellow-100 text-yellow-800",
-  Weak: "bg-red-100 text-red-800",
+const getStatusIcon = (status) => {
+  return status === "critical"
+    ? AlertCircle
+    : status === "warning"
+    ? Clock
+    : CheckCircle;
 };
 
-const statusColors = {
-  critical: "text-red-600",
-  warning: "text-yellow-600",
-  healthy: "text-green-600",
+const navigateToPersonalKeys = () => {
+  router.push("/user/personal-keys");
 };
 
-const maskPassword = (password) => {
-  return "•".repeat(12);
+const navigateToAssignedKeys = () => {
+  router.push("/user/assigned-keys");
 };
 
-const getPrivilegeColor = (privilege) =>
-  privilegeColors[privilege] || "bg-gray-100 text-gray-800";
-const getPolicyColor = (policy) =>
-  policyColors[policy] || "bg-gray-100 text-gray-800";
-
-const handleViewPassword = (password) => {
-  selectedPassword.value = password;
-  showPasswordModal.value = true;
-  accountPassword.value = "";
-  passwordError.value = "";
-  revealedPassword.value = null;
-};
-
-const handleDeletePassword = (password) => {
-  selectedPassword.value = password;
-  showDeleteModal.value = true;
-};
-
-const handleVerifyPassword = () => {
-  // Simulate password verification (in real app, this would be an API call)
-  if (accountPassword.value === "demo123") {
-    passwordError.value = "";
-    revealedPassword.value = selectedPassword.value;
-  } else {
-    passwordError.value = "Incorrect account password. Please try again.";
-  }
-};
-
-const handleCloseModal = () => {
-  showPasswordModal.value = false;
-  showDeleteModal.value = false;
-  selectedPassword.value = null;
-  accountPassword.value = "";
-  passwordError.value = "";
-  revealedPassword.value = null;
-};
-
-const handleConfirmDelete = () => {
-  if (activeTab.value === "personal") {
-    personalPasswords.value = personalPasswords.value.filter(
-      (p) => p.id !== selectedPassword.value.id
-    );
-  }
-  handleCloseModal();
+const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 };
 </script>
 
 <template>
   <BaseLayout>
-    <div class="p-4 sm:p-6">
-      <!-- Page Header -->
+    <div class="p-4 sm:p-6 space-y-6">
+      <!-- Welcome Header -->
       <div class="mb-8">
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
-          User Dashboard
+          Welcome back, {{ userData.name }}
         </h1>
         <p class="mt-2 text-sm sm:text-base text-gray-600">
-          Manage your system and personal passwords securely
+          Here's an overview of your password management dashboard
         </p>
       </div>
 
-      <!-- Tabs Navigation -->
-      <div class="mb-8 border-b border-gray-200">
-        <div class="flex gap-4 sm:gap-8">
-          <button
-            @click="activeTab = 'system'"
-            :class="[
-              'pb-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap',
-              activeTab === 'system'
-                ? 'border-black text-gray-900'
-                : 'border-transparent text-gray-600 hover:text-gray-900',
-            ]"
-          >
-            <Lock class="inline mr-1 sm:mr-2 h-4 w-4" />
-            System Passwords
-          </button>
-          <button
-            @click="activeTab = 'personal'"
-            :class="[
-              'pb-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap',
-              activeTab === 'personal'
-                ? 'border-black text-gray-900'
-                : 'border-transparent text-gray-600 hover:text-gray-900',
-            ]"
-          >
-            <Eye class="inline mr-1 sm:mr-2 h-4 w-4" />
-            Personal Passwords
-          </button>
-        </div>
-      </div>
-
-      <!-- System Passwords Tab -->
-      <div v-show="activeTab === 'system'" class="space-y-6">
-        <div class="rounded-lg border bg-white shadow-sm overflow-hidden">
-          <div class="border-b bg-gray-50 px-4 sm:px-6 py-4">
-            <h2 class="text-lg font-semibold text-gray-900">
-              System Passwords
-            </h2>
-            <p class="text-sm text-gray-600 mt-1">
-              View system passwords assigned to you
-            </p>
-          </div>
-
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b bg-gray-50">
-                  <th
-                    class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    System Name
-                  </th>
-                  <th
-                    class="hidden sm:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Password
-                  </th>
-                  <th
-                    class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Duration
-                  </th>
-                  <th
-                    class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Time Left
-                  </th>
-                  <th
-                    class="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Privilege
-                  </th>
-                  <th
-                    class="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Policy
-                  </th>
-                  <th
-                    class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <tr
-                  v-for="pwd in systemPasswords"
-                  :key="pwd.id"
-                  class="hover:bg-gray-50 transition-colors"
-                >
-                  <td
-                    class="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900"
-                  >
-                    {{ pwd.systemName }}
-                  </td>
-                  <td class="hidden sm:table-cell px-4 sm:px-6 py-4">
-                    <span class="text-sm font-mono text-gray-600">{{
-                      maskPassword(pwd.password)
-                    }}</span>
-                  </td>
-                  <td
-                    class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
-                  >
-                    {{ pwd.duration }}d
-                  </td>
-                  <td class="px-4 sm:px-6 py-4">
-                    <div class="flex items-center gap-2">
-                      <AlertCircle
-                        v-if="pwd.status === 'critical'"
-                        class="h-4 w-4"
-                        :class="statusColors[pwd.status]"
-                      />
-                      <Clock
-                        v-else-if="pwd.status === 'warning'"
-                        class="h-4 w-4"
-                        :class="statusColors[pwd.status]"
-                      />
-                      <CheckCircle
-                        v-else
-                        class="h-4 w-4"
-                        :class="statusColors[pwd.status]"
-                      />
-                      <span
-                        :class="[
-                          'text-sm font-medium',
-                          statusColors[pwd.status],
-                        ]"
-                      >
-                        {{ pwd.daysLeft }}d
-                      </span>
-                    </div>
-                  </td>
-                  <td class="hidden lg:table-cell px-4 sm:px-6 py-4">
-                    <span
-                      :class="[
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                        getPrivilegeColor(pwd.privilege),
-                      ]"
-                    >
-                      {{ pwd.privilege }}
-                    </span>
-                  </td>
-                  <td class="hidden lg:table-cell px-4 sm:px-6 py-4">
-                    <span
-                      :class="[
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                        getPolicyColor(pwd.policy),
-                      ]"
-                    >
-                      {{ pwd.policy }}
-                    </span>
-                  </td>
-                  <td class="px-4 sm:px-6 py-4">
-                    <button
-                      @click="handleViewPassword(pwd)"
-                      class="inline-flex items-center gap-1 px-3 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 transition-colors"
-                    >
-                      <Eye class="h-4 w-4" />
-                      <span class="hidden sm:inline">View</span>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- Personal Passwords Tab -->
-      <div v-show="activeTab === 'personal'" class="space-y-6">
-        <div class="rounded-lg border bg-white shadow-sm overflow-hidden">
-          <div class="border-b bg-gray-50 px-4 sm:px-6 py-4">
-            <h2 class="text-lg font-semibold text-gray-900">
-              Personal Passwords
-            </h2>
-            <p class="text-sm text-gray-600 mt-1">
-              Manage your personal password entries
-            </p>
-          </div>
-
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b bg-gray-50">
-                  <th
-                    class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    System Name
-                  </th>
-                  <th
-                    class="hidden sm:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Password
-                  </th>
-                  <th
-                    class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Duration
-                  </th>
-                  <th
-                    class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Time Left
-                  </th>
-                  <th
-                    class="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Privilege
-                  </th>
-                  <th
-                    class="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Policy
-                  </th>
-                  <th
-                    class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <tr
-                  v-for="pwd in personalPasswords"
-                  :key="pwd.id"
-                  class="hover:bg-gray-50 transition-colors"
-                >
-                  <td
-                    class="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900"
-                  >
-                    {{ pwd.systemName }}
-                  </td>
-                  <td class="hidden sm:table-cell px-4 sm:px-6 py-4">
-                    <span class="text-sm font-mono text-gray-600">{{
-                      maskPassword(pwd.password)
-                    }}</span>
-                  </td>
-                  <td
-                    class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
-                  >
-                    {{ pwd.duration }}d
-                  </td>
-                  <td class="px-4 sm:px-6 py-4">
-                    <div class="flex items-center gap-2">
-                      <AlertCircle
-                        v-if="pwd.status === 'critical'"
-                        class="h-4 w-4"
-                        :class="statusColors[pwd.status]"
-                      />
-                      <Clock
-                        v-else-if="pwd.status === 'warning'"
-                        class="h-4 w-4"
-                        :class="statusColors[pwd.status]"
-                      />
-                      <CheckCircle
-                        v-else
-                        class="h-4 w-4"
-                        :class="statusColors[pwd.status]"
-                      />
-                      <span
-                        :class="[
-                          'text-sm font-medium',
-                          statusColors[pwd.status],
-                        ]"
-                      >
-                        {{ pwd.daysLeft }}d
-                      </span>
-                    </div>
-                  </td>
-                  <td class="hidden lg:table-cell px-4 sm:px-6 py-4">
-                    <span
-                      :class="[
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                        getPrivilegeColor(pwd.privilege),
-                      ]"
-                    >
-                      {{ pwd.privilege }}
-                    </span>
-                  </td>
-                  <td class="hidden lg:table-cell px-4 sm:px-6 py-4">
-                    <span
-                      :class="[
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                        getPolicyColor(pwd.policy),
-                      ]"
-                    >
-                      {{ pwd.policy }}
-                    </span>
-                  </td>
-                  <td class="px-4 sm:px-6 py-4">
-                    <div class="flex items-center gap-1 sm:gap-2">
-                      <button
-                        @click="handleViewPassword(pwd)"
-                        class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 transition-colors"
-                      >
-                        <Eye class="h-4 w-4" />
-                        <span class="hidden sm:inline">View</span>
-                      </button>
-                      <button
-                        @click="handleViewPassword(pwd)"
-                        class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                      >
-                        <Edit class="h-4 w-4" />
-                        <span class="hidden sm:inline">Edit</span>
-                      </button>
-                      <button
-                        @click="handleDeletePassword(pwd)"
-                        class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                      >
-                        <Trash2 class="h-4 w-4" />
-                        <span class="hidden sm:inline">Delete</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- View Password Modal -->
-    <div
-      v-if="showPasswordModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-    >
-      <div class="relative w-full max-w-md rounded-lg bg-white shadow-xl">
-        <div class="border-b px-6 py-4 flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-gray-900">
-            Verify Account Password
-          </h2>
-          <button
-            @click="handleCloseModal"
-            class="text-gray-500 hover:text-gray-700"
-          >
-            <X class="h-5 w-5" />
-          </button>
-        </div>
-
-        <div class="px-6 py-4">
-          <template v-if="!revealedPassword">
-            <div class="mb-4">
-              <p class="text-sm text-gray-600 mb-4">
-                Please enter your account password to view the details for:
-              </p>
-              <div class="bg-gray-50 p-3 rounded-md border border-gray-200">
-                <p class="text-sm font-medium text-gray-900">
-                  {{ selectedPassword?.systemName }}
-                </p>
-              </div>
-            </div>
-
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-900 mb-2">
-                Account Password
-              </label>
-              <input
-                type="password"
-                v-model="accountPassword"
-                @keypress.enter="handleVerifyPassword"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                placeholder="Enter your account password"
-              />
-              <p v-if="passwordError" class="mt-2 text-sm text-red-600">
-                {{ passwordError }}
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <!-- Total Keys -->
+        <div class="bg-white rounded-lg border shadow-sm p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Total Keys</p>
+              <p class="text-3xl font-bold text-gray-900 mt-2">
+                {{ stats.total }}
               </p>
             </div>
-
-            <div class="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-              <p class="text-xs text-blue-800">
-                Demo password:
-                <span class="font-mono font-semibold">demo123</span>
-              </p>
+            <div class="h-12 w-12 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Key class="h-6 w-6 text-blue-600" />
             </div>
-
-            <div class="border-t pt-4 flex gap-3">
-              <button
-                @click="handleCloseModal"
-                class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                @click="handleVerifyPassword"
-                class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800"
-              >
-                Verify
-              </button>
-            </div>
-          </template>
-
-          <template v-else>
-            <div class="space-y-4 mb-6">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >System Name</label
-                >
-                <p class="text-sm text-gray-900 font-medium">
-                  {{ revealedPassword.systemName }}
-                </p>
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2"
-                  >Password</label
-                >
-                <div
-                  class="flex items-center gap-2 bg-gray-50 p-3 rounded-md border border-gray-200"
-                >
-                  <Lock class="h-4 w-4 text-gray-400" />
-                  <code class="text-sm font-mono text-gray-900">{{
-                    revealedPassword.password
-                  }}</code>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2"
-                    >Privilege</label
-                  >
-                  <span
-                    :class="[
-                      'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                      getPrivilegeColor(revealedPassword.privilege),
-                    ]"
-                  >
-                    {{ revealedPassword.privilege }}
-                  </span>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2"
-                    >Policy</label
-                  >
-                  <span
-                    :class="[
-                      'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                      getPolicyColor(revealedPassword.policy),
-                    ]"
-                  >
-                    {{ revealedPassword.policy }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1"
-                    >Duration</label
-                  >
-                  <p class="text-sm text-gray-900">
-                    {{ revealedPassword.duration }} days
-                  </p>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1"
-                    >Time Left</label
-                  >
-                  <p
-                    :class="[
-                      'text-sm font-medium',
-                      statusColors[revealedPassword.status],
-                    ]"
-                  >
-                    {{ revealedPassword.daysLeft }} days
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="border-t pt-4">
-              <button
-                @click="handleCloseModal"
-                class="w-full px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800"
-              >
-                Close
-              </button>
-            </div>
-          </template>
-        </div>
-      </div>
-    </div>
-
-    <!-- Delete Confirmation Modal -->
-    <div
-      v-if="showDeleteModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-    >
-      <div class="relative w-full max-w-md rounded-lg bg-white shadow-xl">
-        <div class="border-b px-6 py-4 flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-gray-900">Confirm Deletion</h2>
-          <button
-            @click="handleCloseModal"
-            class="text-gray-500 hover:text-gray-700"
-          >
-            <X class="h-5 w-5" />
-          </button>
-        </div>
-
-        <div class="px-6 py-4">
-          <p class="text-sm text-gray-600 mb-4">
-            Are you sure you want to delete this password entry? This action
-            cannot be undone.
+          </div>
+          <p class="text-xs text-gray-500 mt-4">
+            {{ personalKeys.length }} personal, {{ assignedKeys.length }} assigned
           </p>
-          <div class="bg-red-50 border border-red-200 p-3 rounded-md mb-6">
-            <p class="text-sm font-medium text-gray-900">
-              {{ selectedPassword?.systemName }}
-            </p>
+        </div>
+
+        <!-- Critical Keys -->
+        <div class="bg-white rounded-lg border shadow-sm p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Critical</p>
+              <p class="text-3xl font-bold text-red-600 mt-2">
+                {{ stats.critical }}
+              </p>
+            </div>
+            <div class="h-12 w-12 bg-red-50 rounded-lg flex items-center justify-center">
+              <AlertTriangle class="h-6 w-6 text-red-600" />
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-4">
+            Expiring within 7 days
+          </p>
+        </div>
+
+        <!-- Warning Keys -->
+        <div class="bg-white rounded-lg border shadow-sm p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Warning</p>
+              <p class="text-3xl font-bold text-yellow-600 mt-2">
+                {{ stats.warning }}
+              </p>
+            </div>
+            <div class="h-12 w-12 bg-yellow-50 rounded-lg flex items-center justify-center">
+              <Clock class="h-6 w-6 text-yellow-600" />
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-4">
+            Expiring within 30 days
+          </p>
+        </div>
+
+        <!-- Healthy Keys -->
+        <div class="bg-white rounded-lg border shadow-sm p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Healthy</p>
+              <p class="text-3xl font-bold text-green-600 mt-2">
+                {{ stats.healthy }}
+              </p>
+            </div>
+            <div class="h-12 w-12 bg-green-50 rounded-lg flex items-center justify-center">
+              <Shield class="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-4">
+            More than 30 days remaining
+          </p>
+        </div>
+      </div>
+
+      <!-- Main Content Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column - Takes 2/3 width on large screens -->
+        <div class="lg:col-span-2 space-y-6">
+          <!-- Keys Expiring Soon -->
+          <div class="bg-white rounded-lg border shadow-sm overflow-hidden">
+            <div class="border-b bg-gray-50 px-6 py-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h2 class="text-lg font-semibold text-gray-900">
+                    Keys Expiring Soon
+                  </h2>
+                  <p class="text-sm text-gray-600 mt-1">
+                    Action required within 30 days
+                  </p>
+                </div>
+                <AlertTriangle class="h-5 w-5 text-orange-500" />
+              </div>
+            </div>
+
+            <div class="divide-y">
+              <div
+                v-for="key in keysExpiringSoon"
+                :key="key.id"
+                class="p-4 sm:p-6 hover:bg-gray-50 transition-colors"
+              >
+                <div class="flex items-start justify-between gap-4">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <h3 class="text-sm font-semibold text-gray-900 truncate">
+                        {{ key.systemName }}
+                      </h3>
+                      <span
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700"
+                      >
+                        {{ key.type === "personal" ? "Personal" : "Assigned" }}
+                      </span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-2">
+                      {{ key.description }}
+                    </p>
+                    <div class="flex items-center gap-4 text-xs text-gray-500">
+                      <span class="flex items-center gap-1">
+                        <Calendar class="h-3 w-3" />
+                        Duration: {{ key.duration }}d
+                      </span>
+                      <span v-if="key.assignedBy" class="flex items-center gap-1">
+                        <Users class="h-3 w-3" />
+                        By: {{ key.assignedBy }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col items-end gap-2">
+                    <component
+                      :is="getStatusIcon(key.status)"
+                      :class="['h-5 w-5', getStatusColor(key.status).split(' ')[0]]"
+                    />
+                    <span
+                      :class="[
+                        'text-sm font-bold',
+                        getStatusColor(key.status).split(' ')[0],
+                      ]"
+                    >
+                      {{ key.daysLeft }}d left
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-if="keysExpiringSoon.length === 0"
+                class="p-8 text-center text-sm text-gray-500"
+              >
+                <CheckCircle class="h-12 w-12 text-green-500 mx-auto mb-2" />
+                <p>All keys are healthy! No immediate action required.</p>
+              </div>
+            </div>
           </div>
 
-          <div class="border-t pt-4 flex gap-3">
-            <button
-              @click="handleCloseModal"
-              class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-            >
-              Cancel
-            </button>
-            <button
-              @click="handleConfirmDelete"
-              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
-            >
-              Delete
-            </button>
+          <!-- Recent Activity -->
+          <div class="bg-white rounded-lg border shadow-sm overflow-hidden">
+            <div class="border-b bg-gray-50 px-6 py-4">
+              <h2 class="text-lg font-semibold text-gray-900">
+                Recent Activity
+              </h2>
+              <p class="text-sm text-gray-600 mt-1">
+                Latest password entries and assignments
+              </p>
+            </div>
+
+            <div class="divide-y">
+              <div
+                v-for="key in recentActivity"
+                :key="key.id"
+                class="p-4 sm:p-6 hover:bg-gray-50 transition-colors"
+              >
+                <div class="flex items-center justify-between gap-4">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <h3 class="text-sm font-semibold text-gray-900 truncate">
+                        {{ key.systemName }}
+                      </h3>
+                      <span
+                        :class="[
+                          'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                          key.type === 'personal'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-purple-100 text-purple-700',
+                        ]"
+                      >
+                        {{ key.type === "personal" ? "Personal" : "Assigned" }}
+                      </span>
+                    </div>
+                    <p class="text-xs text-gray-500">
+                      {{ key.type === "personal" ? "Created" : "Assigned" }}
+                      {{ formatDate(key.createdAt || key.assignedAt) }}
+                    </p>
+                  </div>
+                  <component
+                    :is="getStatusIcon(key.status)"
+                    :class="['h-5 w-5', getStatusColor(key.status).split(' ')[0]]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column - Takes 1/3 width on large screens -->
+        <div class="space-y-6">
+          <!-- Quick Actions -->
+          <div class="bg-white rounded-lg border shadow-sm overflow-hidden">
+            <div class="border-b bg-gray-50 px-6 py-4">
+              <h2 class="text-lg font-semibold text-gray-900">
+                Quick Actions
+              </h2>
+            </div>
+
+            <div class="p-4 space-y-2">
+              <button
+                @click="navigateToPersonalKeys"
+                class="w-full flex items-center justify-between p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors group"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="h-10 w-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                    <Key class="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold text-gray-900">
+                      Personal Keys
+                    </p>
+                    <p class="text-xs text-gray-500">
+                      {{ personalKeys.length }} keys
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight class="h-5 w-5 text-gray-400 group-hover:text-gray-600" />
+              </button>
+
+              <button
+                @click="navigateToAssignedKeys"
+                class="w-full flex items-center justify-between p-4 text-left border rounded-lg hover:bg-gray-50 transition-colors group"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="h-10 w-10 bg-purple-50 rounded-lg flex items-center justify-center">
+                    <Users class="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold text-gray-900">
+                      Assigned Keys
+                    </p>
+                    <p class="text-xs text-gray-500">
+                      {{ assignedKeys.length }} keys
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight class="h-5 w-5 text-gray-400 group-hover:text-gray-600" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Security Summary -->
+          <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200 shadow-sm overflow-hidden">
+            <div class="p-6">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <Shield class="h-5 w-5 text-white" />
+                </div>
+                <h2 class="text-lg font-semibold text-gray-900">
+                  Security Score
+                </h2>
+              </div>
+
+              <div class="mb-4">
+                <div class="flex items-end gap-2 mb-2">
+                  <span class="text-4xl font-bold text-blue-600">
+                    {{ Math.round((stats.healthy / stats.total) * 100) }}%
+                  </span>
+                  <TrendingUp class="h-6 w-6 text-green-500 mb-1" />
+                </div>
+                <p class="text-sm text-gray-600">
+                  Your password health is good. Keep monitoring expiring keys.
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <div class="flex justify-between text-sm">
+                  <span class="text-gray-600">Healthy Keys</span>
+                  <span class="font-semibold text-green-600">
+                    {{ stats.healthy }}
+                  </span>
+                </div>
+                <div class="flex justify-between text-sm">
+                  <span class="text-gray-600">Need Attention</span>
+                  <span class="font-semibold text-yellow-600">
+                    {{ stats.warning }}
+                  </span>
+                </div>
+                <div class="flex justify-between text-sm">
+                  <span class="text-gray-600">Critical</span>
+                  <span class="font-semibold text-red-600">
+                    {{ stats.critical }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Upcoming Expirations Calendar -->
+          <div class="bg-white rounded-lg border shadow-sm overflow-hidden">
+            <div class="border-b bg-gray-50 px-6 py-4">
+              <h2 class="text-lg font-semibold text-gray-900">
+                This Month
+              </h2>
+              <p class="text-sm text-gray-600 mt-1">
+                December 2025
+              </p>
+            </div>
+
+            <div class="p-6">
+              <div class="space-y-3">
+                <div
+                  v-for="key in keysExpiringSoon.slice(0, 3)"
+                  :key="key.id"
+                  class="flex items-center gap-3 p-3 rounded-lg bg-gray-50"
+                >
+                  <div
+                    :class="[
+                      'h-2 w-2 rounded-full',
+                      key.status === 'critical'
+                        ? 'bg-red-500'
+                        : key.status === 'warning'
+                        ? 'bg-yellow-500'
+                        : 'bg-green-500',
+                    ]"
+                  ></div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900 truncate">
+                      {{ key.systemName }}
+                    </p>
+                    <p class="text-xs text-gray-500">
+                      {{ key.daysLeft }} days remaining
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  v-if="keysExpiringSoon.length === 0"
+                  class="text-center py-4"
+                >
+                  <Calendar class="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p class="text-sm text-gray-500">
+                    No expirations this month
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
