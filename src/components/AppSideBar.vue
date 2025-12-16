@@ -33,18 +33,31 @@ const data = {
             url: '/dashboard',
             icon: LayoutDashboard,
             items: [
-                {
+                 {
                     title: 'Overview',
                     url: '/admin/dashboard',
-                },
-                {
-                    title: 'Access Trails',
-                    url: '/admin/dashboard/auth-trails',
                 },
                 {
                     title: 'My Dashboard',
                     url: '/user/dashboard',
                 },
+                {
+                    title: 'My Dashboard2',
+                    url: '/user/dashboard2',
+                },
+                {
+                    title: 'Assigned Keys',
+                    url: '/user/assigned-keys',
+                },
+                {
+                    title: 'Personal Keys',
+                    url: '/user/personal-keys',
+                },
+                {
+                    title: 'Access Trails',
+                    url: '/admin/dashboard/auth-trails',
+                },
+                
             ],
         },
         {
