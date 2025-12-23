@@ -13,8 +13,12 @@ import NavMain from '@/components/NavMain.vue'
 // import NavProjects from '@/components/NavProjects.vue'
 import NavUser from '@/components/NavUser.vue'
 import AppLogo from '@/components/AppLogo.vue'
+import { storeToRefs } from 'pinia';
+import { useUserStore } from '@/stores/useUserStore';
 
 const route = useRoute()
+const userStore = useUserStore();
+const { user } = storeToRefs(userStore);
 
 defineProps({
     isCollapsed: { type: Boolean, default: false },
@@ -23,8 +27,8 @@ defineProps({
 
 const data = {
     user: {
-        name: 'Jnboateng',
-        email: 'jnboateng@nanopass.com',
+        name: user.value?.username || 'NanoPass User',
+        email: user.value?.email || 'testuser@nanopass.com',
         avatar: '../assets/icons/codesandbox.svg',
     },
     navMain: [
@@ -68,7 +72,15 @@ const data = {
                 {
                     title: 'Users',
                     url: '/admin/dashboard/create-user',
-                }
+                },
+                // {
+                //     title: 'Create Department',
+                //     url: '/admin/dashboard/create-department',
+                // },
+                // {
+                //     title: 'System Assignments',
+                //     url: '/admin/dashboard/system-assignments',
+                // },
             ],
         },
         {
@@ -76,22 +88,23 @@ const data = {
             url: '#',
             icon: Settings2,
             items: [
+                // {
+                //     title: 'Create User Privileges',
+                //     url: '/admin/dashboard/create-privileges',
+                // },
                 {
-                    title: 'Create System User Privileges',
-                    url: '/admin/dashboard/create-privileges',
-                },
-                {
-                    title: 'Create System Passwords Category',
-                    url: '/admin/dashboard/create-system-passwords-category',
-                },
-                {
-                    title: 'Create System Passwords Policy Category',
+                    title: 'Create System Passwords Policy',
                     url: '/admin/dashboard/create-system-passwords-policy-category',
+                },
+                {
+                    title: 'Create System Category',
+                    url: '/admin/dashboard/create-system-passwords-category',
                 },
                 {
                     title: 'Create System Passwords',
                     url: '/admin/dashboard/create-system-passwords',
                 },
+                
             ],
         },
         // {
