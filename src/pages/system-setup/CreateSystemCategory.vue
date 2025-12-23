@@ -1,22 +1,35 @@
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { Trash2, Edit2, Plus } from "lucide-vue-next";
 import BaseLayout from "@/layouts/AppLayout.vue";
+
+// Available password policies
+const passwordPolicies = ref([
+  { id: 1, name: "Basic Password" },
+  { id: 2, name: "Strong Password" },
+  { id: 3, name: "Medium Password" },
+]);
 
 // State management
 const categories = ref([
   {
     id: 1,
+    policy_id: 1,
+    policy_name: "Basic Password",
     name: "General",
     description: "General system settings and configurations.",
   },
   {
     id: 2,
+    policy_id: 2,
+    policy_name: "Strong Password",
     name: "Security",
     description: "Security-related settings and policies.",
   },
   {
     id: 3,
+    policy_id: 3,
+    policy_name: "Medium Password",
     name: "Performance",
     description: "Performance optimization settings.",
   },
@@ -31,40 +44,50 @@ const searchQuery = ref("");
 // Form data
 const formData = ref({
   name: "",
+  policy_id: "",
   description: "",
 });
 
 // Computed filtered categories based on search
-const filteredCategories = ref([]);
-const updateFilteredCategories = () => {
+const filteredCategories = computed(() => {
   if (!searchQuery.value.trim()) {
-    filteredCategories.value = categories.value;
-    return;
+    return categories.value;
   }
   const query = searchQuery.value.toLowerCase();
-  filteredCategories.value = categories.value.filter(
+  return categories.value.filter(
     (category) =>
       category.name.toLowerCase().includes(query) ||
+      category.policy_name.toLowerCase().includes(query) ||
       category.description.toLowerCase().includes(query)
   );
+});
+
+// Helper function to get policy name by ID
+const getPolicyName = (policyId) => {
+  const policy = passwordPolicies.value.find((p) => p.id === policyId);
+  return policy ? policy.name : "Unknown Policy";
 };
 
 // Open Add Modal
 const openAddModal = () => {
-  formData.value = { name: "", description: "" };
+  formData.value = { name: "", policy_id: "", description: "" };
   showAddModal.value = true;
 };
 
 // Close Add Modal
 const closeAddModal = () => {
   showAddModal.value = false;
-  formData.value = { name: "", description: "" };
+  formData.value = { name: "", policy_id: "", description: "" };
 };
 
 // Open Edit Modal
 const openEditModal = (category) => {
   selectedCategory.value = category;
-  formData.value = { name: category.name, description: category.description };
+  formData.value = {
+    name: category.name,
+    policy_id: category.policy_id,
+    description: category.description,
+  };
   showEditModal.value = true;
 };
 
@@ -72,7 +95,7 @@ const openEditModal = (category) => {
 const closeEditModal = () => {
   showEditModal.value = false;
   selectedCategory.value = null;
-  formData.value = { name: "", description: "" };
+  formData.value = { name: "", policy_id: "", description: "" };
 };
 
 // Open Delete Modal
@@ -89,25 +112,30 @@ const closeDeleteModal = () => {
 
 // Add Category
 const addCategory = () => {
-  if (formData.value.name.trim()) {
+  if (formData.value.name.trim() && formData.value.policy_id) {
+    const policyName = getPolicyName(Number(formData.value.policy_id));
     categories.value.push({
       id: Math.max(...categories.value.map((c) => c.id), 0) + 1,
       name: formData.value.name,
+      policy_id: Number(formData.value.policy_id),
+      policy_name: policyName,
       description: formData.value.description,
     });
-    updateFilteredCategories();
     closeAddModal();
   }
 };
 
 // Update Category
 const updateCategory = () => {
-  if (formData.value.name.trim() && selectedCategory.value) {
+  if (formData.value.name.trim() && formData.value.policy_id && selectedCategory.value) {
     const index = categories.value.findIndex(
       (c) => c.id === selectedCategory.value.id
     );
     if (index > -1) {
+      const policyName = getPolicyName(Number(formData.value.policy_id));
       categories.value[index].name = formData.value.name;
+      categories.value[index].policy_id = Number(formData.value.policy_id);
+      categories.value[index].policy_name = policyName;
       categories.value[index].description = formData.value.description;
     }
     closeEditModal();
@@ -119,12 +147,8 @@ const deleteCategory = () => {
   categories.value = categories.value.filter(
     (c) => c.id !== selectedCategory.value.id
   );
-  updateFilteredCategories();
   closeDeleteModal();
 };
-
-// Initialize filtered categories on component mount
-updateFilteredCategories();
 </script>
 
 <template>
@@ -155,9 +179,8 @@ updateFilteredCategories();
         <div class="flex-1">
           <input
             v-model="searchQuery"
-            @input="updateFilteredCategories"
             type="text"
-            placeholder="Search categories..."
+            placeholder="Search categories by name, policy, or description..."
             class="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-md text-xs sm:text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
           />
         </div>
@@ -178,6 +201,11 @@ updateFilteredCategories();
                   class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
                 >
                   Name
+                </th>
+                <th
+                  class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                >
+                  Password Policy
                 </th>
                 <th
                   class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide hidden sm:table-cell"
@@ -202,10 +230,19 @@ updateFilteredCategories();
                 >
                   <div class="flex flex-col sm:block">
                     <span class="font-semibold">{{ category.name }}</span>
-                    <span class="text-gray-600 sm:hidden text-xs">{{
-                      category.description
+                    <span class="text-gray-600 sm:hidden text-xs mt-1">{{
+                      category.policy_name
                     }}</span>
                   </div>
+                </td>
+                <td
+                  class="px-4 sm:px-6 py-4 text-xs sm:text-sm text-gray-600 hidden sm:table-cell"
+                >
+                  <span
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                  >
+                    {{ category.policy_name }}
+                  </span>
                 </td>
                 <td
                   class="px-4 sm:px-6 py-4 text-xs sm:text-sm text-gray-600 hidden sm:table-cell"
@@ -268,7 +305,7 @@ updateFilteredCategories();
             <label
               for="add-name"
               class="block text-xs sm:text-sm font-medium text-gray-900 mb-1"
-              >Category Name</label
+              >Category Name <span class="text-red-600">*</span></label
             >
             <input
               id="add-name"
@@ -277,6 +314,27 @@ updateFilteredCategories();
               placeholder="Enter category name"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
+          </div>
+          <div>
+            <label
+              for="add-policy"
+              class="block text-xs sm:text-sm font-medium text-gray-900 mb-1"
+              >Password Policy <span class="text-red-600">*</span></label
+            >
+            <select
+              id="add-policy"
+              v-model="formData.policy_id"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            >
+              <option value="" disabled>Select a password policy</option>
+              <option
+                v-for="policy in passwordPolicies"
+                :key="policy.id"
+                :value="policy.id"
+              >
+                {{ policy.name }}
+              </option>
+            </select>
           </div>
           <div>
             <label
@@ -304,7 +362,8 @@ updateFilteredCategories();
           </button>
           <button
             @click="addCategory"
-            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black"
+            :disabled="!formData.name.trim() || !formData.policy_id"
+            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Add Category
           </button>
@@ -329,7 +388,7 @@ updateFilteredCategories();
             <label
               for="edit-name"
               class="block text-xs sm:text-sm font-medium text-gray-900 mb-1"
-              >Category Name</label
+              >Category Name <span class="text-red-600">*</span></label
             >
             <input
               id="edit-name"
@@ -338,6 +397,27 @@ updateFilteredCategories();
               placeholder="Enter category name"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
+          </div>
+          <div>
+            <label
+              for="edit-policy"
+              class="block text-xs sm:text-sm font-medium text-gray-900 mb-1"
+              >Password Policy <span class="text-red-600">*</span></label
+            >
+            <select
+              id="edit-policy"
+              v-model="formData.policy_id"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs sm:text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            >
+              <option value="" disabled>Select a password policy</option>
+              <option
+                v-for="policy in passwordPolicies"
+                :key="policy.id"
+                :value="policy.id"
+              >
+                {{ policy.name }}
+              </option>
+            </select>
           </div>
           <div>
             <label
@@ -365,7 +445,8 @@ updateFilteredCategories();
           </button>
           <button
             @click="updateCategory"
-            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black"
+            :disabled="!formData.name.trim() || !formData.policy_id"
+            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Save Changes
           </button>

@@ -1,7 +1,12 @@
 <script setup>
-import { ref } from "vue";
-import { Trash2, Edit2, Plus, Eye, EyeOff } from "lucide-vue-next";
+import { ref, onMounted, computed } from "vue";
+import { Trash2, Edit2, Plus, Eye, EyeOff, Loader2 } from "lucide-vue-next";
 import BaseLayout from "@/layouts/AppLayout.vue";
+import { storeToRefs } from "pinia";
+import { useUserStore } from "@/stores/useUserStore";
+
+const userStore = useUserStore();
+const { user, users, loading, error } = storeToRefs(userStore);
 
 // Sample privileges (would typically come from an API)
 const availablePrivileges = ref([
@@ -17,62 +22,53 @@ const availableSystems = ref([
 ]);
 
 // State management
-const users = ref([
-  {
-    id: 1,
-    username: "jnboateng",
-    email: "jnboateng@nanopass.com",
-    password: "SecurePass123!",
-    privilege: "Admin",
-    system: "Main Production",
-  },
-  {
-    id: 2,
-    username: "asmith",
-    email: "asmith@nanopass.com",
-    password: "EditorPass456!",
-    privilege: "Editor",
-    system: "Staging Environment",
-  },
-]);
-
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showDeleteModal = ref(false);
 const showPasswordFields = ref({});
 const selectedUser = ref(null);
 const searchQuery = ref("");
+const submitting = ref(false);
+const successMessage = ref("");
 
 // Form data
 const formData = ref({
-  username: "",
+  name: "",
   email: "",
   password: "",
+  password_confirmation: "",
+  admin: false,
   privilege: "",
   system: "",
 });
 
-// Computed filtered users based on search
-const filteredUsers = ref([]);
-const updateFilteredUsers = () => {
-  if (!searchQuery.value.trim()) {
-    filteredUsers.value = users.value;
-    return;
+// Load users on component mount
+onMounted(async () => {
+  await loadUsers();
+});
+
+// Load all users
+const loadUsers = async () => {
+  try {
+    await userStore.getAllUsers();
+  } catch (err) {
+    console.error("Error loading users:", err);
   }
-  const query = searchQuery.value.toLowerCase();
-  filteredUsers.value = users.value.filter(
-    (user) =>
-      user.username.toLowerCase().includes(query) ||
-      user.email.toLowerCase().includes(query) ||
-      user.privilege.toLowerCase().includes(query) ||
-      user.system.toLowerCase().includes(query)
-  );
 };
 
-// Watch for user changes and update filtered list
-const updateUsers = () => {
-  updateFilteredUsers();
-};
+// Computed filtered users based on search
+const filteredUsers = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return users.value;
+  }
+  const query = searchQuery.value.toLowerCase();
+  return users.value.filter(
+    (user) =>
+      user.name?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query) ||
+      user.username?.toLowerCase().includes(query)
+  );
+});
 
 // Toggle password visibility
 const togglePasswordVisibility = (userId) => {
@@ -82,12 +78,16 @@ const togglePasswordVisibility = (userId) => {
 // Open Add Modal
 const openAddModal = () => {
   formData.value = {
-    username: "",
+    name: "",
     email: "",
     password: "",
+    password_confirmation: "",
+    admin: false,
     privilege: "",
     system: "",
   };
+  successMessage.value = "";
+  userStore.clearError();
   showAddModal.value = true;
 };
 
@@ -95,25 +95,41 @@ const openAddModal = () => {
 const closeAddModal = () => {
   showAddModal.value = false;
   formData.value = {
-    username: "",
+    name: "",
     email: "",
     password: "",
+    password_confirmation: "",
+    admin: false,
     privilege: "",
     system: "",
   };
+  successMessage.value = "";
+  userStore.clearError();
 };
 
 // Open Edit Modal
-const openEditModal = (user) => {
-  selectedUser.value = user;
-  formData.value = {
-    username: user.username,
-    email: user.email,
-    password: user.password,
-    privilege: user.privilege,
-    system: user.system,
-  };
-  showEditModal.value = true;
+const openEditModal = async (userToEdit) => {
+  try {
+    // Fetch full user details
+    const result = await userStore.getUserById(userToEdit.id);
+    const userData = result.data || result;
+    
+    selectedUser.value = userData;
+    formData.value = {
+      name: userData.name || userData.username || "",
+      email: userData.email || "",
+      password: "",
+      password_confirmation: "",
+      admin: userData.admin || false,
+      privilege: userData.privilege || "",
+      system: userData.system || "",
+    };
+    successMessage.value = "";
+    userStore.clearError();
+    showEditModal.value = true;
+  } catch (err) {
+    console.error("Error loading user:", err);
+  }
 };
 
 // Close Edit Modal
@@ -121,17 +137,23 @@ const closeEditModal = () => {
   showEditModal.value = false;
   selectedUser.value = null;
   formData.value = {
-    username: "",
+    name: "",
     email: "",
     password: "",
+    password_confirmation: "",
+    admin: false,
     privilege: "",
     system: "",
   };
+  successMessage.value = "";
+  userStore.clearError();
 };
 
 // Open Delete Modal
-const openDeleteModal = (user) => {
-  selectedUser.value = user;
+const openDeleteModal = (userToDelete) => {
+  selectedUser.value = userToDelete;
+  successMessage.value = "";
+  userStore.clearError();
   showDeleteModal.value = true;
 };
 
@@ -139,66 +161,165 @@ const openDeleteModal = (user) => {
 const closeDeleteModal = () => {
   showDeleteModal.value = false;
   selectedUser.value = null;
+  successMessage.value = "";
+  userStore.clearError();
+};
+
+// Validate form
+const validateForm = () => {
+  if (!formData.value.name.trim()) {
+    return "Name is required";
+  }
+  if (!formData.value.email.trim()) {
+    return "Email is required";
+  }
+  if (!showEditModal.value && !formData.value.password.trim()) {
+    return "Password is required";
+  }
+  if (formData.value.password && formData.value.password !== formData.value.password_confirmation) {
+    return "Passwords do not match";
+  }
+  if (formData.value.password && formData.value.password.length < 6) {
+    return "Password must be at least 6 characters";
+  }
+  return null;
 };
 
 // Add User
-const addUser = () => {
-  if (
-    formData.value.username.trim() &&
-    formData.value.email.trim() &&
-    formData.value.password.trim() &&
-    formData.value.privilege &&
-    formData.value.system
-  ) {
-    users.value.push({
-      id: Math.max(...users.value.map((u) => u.id), 0) + 1,
-      username: formData.value.username,
+const addUser = async () => {
+  const validationError = validateForm();
+  if (validationError) {
+    userStore.error = validationError;
+    return;
+  }
+
+  try {
+    submitting.value = true;
+    userStore.clearError();
+
+    const userData = {
+      name: formData.value.name,
       email: formData.value.email,
       password: formData.value.password,
-      privilege: formData.value.privilege,
-      system: formData.value.system,
-    });
-    updateFilteredUsers();
-    closeAddModal();
+      password_confirmation: formData.value.password_confirmation,
+      admin: formData.value.admin,
+    };
+
+    // Note: If your API supports privilege and system, add them here
+    // userData.privilege = formData.value.privilege;
+    // userData.system = formData.value.system;
+
+    await userStore.register(userData);
+    
+    successMessage.value = "User created successfully!";
+    
+    // Reload users list
+    await loadUsers();
+    
+    // Close modal after a short delay
+    setTimeout(() => {
+      closeAddModal();
+    }, 1500);
+  } catch (err) {
+    console.error("Error creating user:", err);
+    // Error is already set in the store
+  } finally {
+    submitting.value = false;
   }
 };
 
 // Update User
-const updateUser = () => {
-  if (
-    formData.value.username.trim() &&
-    formData.value.email.trim() &&
-    formData.value.password.trim() &&
-    formData.value.privilege &&
-    formData.value.system &&
-    selectedUser.value
-  ) {
-    const index = users.value.findIndex((u) => u.id === selectedUser.value.id);
-    if (index > -1) {
-      users.value[index].username = formData.value.username;
-      users.value[index].email = formData.value.email;
-      users.value[index].password = formData.value.password;
-      users.value[index].privilege = formData.value.privilege;
-      users.value[index].system = formData.value.system;
+const updateUser = async () => {
+  const validationError = validateForm();
+  if (validationError) {
+    userStore.error = validationError;
+    return;
+  }
+
+  if (!selectedUser.value) return;
+
+  try {
+    submitting.value = true;
+    userStore.clearError();
+
+    const userData = {
+      name: formData.value.name,
+      email: formData.value.email,
+      admin: formData.value.admin,
+    };
+
+    // Only include password if it's being changed
+    if (formData.value.password.trim()) {
+      userData.password = formData.value.password;
+      userData.password_confirmation = formData.value.password_confirmation;
     }
-    closeEditModal();
+
+    // Note: If your API supports privilege and system, add them here
+    // userData.privilege = formData.value.privilege;
+    // userData.system = formData.value.system;
+
+    await userStore.updateUser(selectedUser.value.id, userData);
+    
+    successMessage.value = "User updated successfully!";
+    
+    // Reload users list
+    await loadUsers();
+    
+    // Close modal after a short delay
+    setTimeout(() => {
+      closeEditModal();
+    }, 1500);
+  } catch (err) {
+    console.error("Error updating user:", err);
+    // Error is already set in the store
+  } finally {
+    submitting.value = false;
   }
 };
 
 // Delete User
-const deleteUser = () => {
-  users.value = users.value.filter((u) => u.id !== selectedUser.value.id);
-  updateFilteredUsers();
-  closeDeleteModal();
+const deleteUser = async () => {
+  if (!selectedUser.value) return;
+
+  try {
+    submitting.value = true;
+    userStore.clearError();
+
+    await userStore.deleteUser(selectedUser.value.id);
+    
+    successMessage.value = "User deleted successfully!";
+    
+    // Close modal after a short delay
+    setTimeout(() => {
+      closeDeleteModal();
+    }, 1000);
+  } catch (err) {
+    console.error("Error deleting user:", err);
+    // Error is already set in the store
+  } finally {
+    submitting.value = false;
+  }
 };
 
 // Mask password for display
 const maskPassword = (password) => {
-  return "*".repeat(password.length);
+  return password ? "*".repeat(password.length) : "";
 };
 
-// Initialize filtered users on component mount
-updateFilteredUsers();
+// Get privilege badge color
+const getPrivilegeBadgeColor = (privilege) => {
+  if (!privilege) return "bg-gray-100 text-gray-800";
+  
+  const privilegeLower = privilege.toLowerCase();
+  if (privilegeLower === "admin") return "bg-red-100 text-red-800";
+  if (privilegeLower === "editor") return "bg-yellow-100 text-yellow-800";
+  return "bg-green-100 text-green-800";
+};
+
+// Get user display name
+const getUserDisplayName = (user) => {
+  return user.name || user.username || user.email;
+};
 </script>
 
 <template>
@@ -224,6 +345,20 @@ updateFilteredUsers();
         </button>
       </div>
 
+      <!-- Global Error Message -->
+      <div
+        v-if="error && !showAddModal && !showEditModal && !showDeleteModal"
+        class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg"
+      >
+        <p class="text-sm text-red-600">{{ error }}</p>
+        <button
+          @click="userStore.clearError()"
+          class="mt-2 text-xs text-red-600 underline"
+        >
+          Dismiss
+        </button>
+      </div>
+
       <!-- Search Bar -->
       <div
         class="mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4"
@@ -231,9 +366,8 @@ updateFilteredUsers();
         <div class="flex-1 w-full">
           <input
             v-model="searchQuery"
-            @input="updateFilteredUsers"
             type="text"
-            placeholder="Search users..."
+            placeholder="Search users by name or email..."
             class="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
           />
         </div>
@@ -244,8 +378,17 @@ updateFilteredUsers();
         </div>
       </div>
 
+      <!-- Loading State -->
+      <div
+        v-if="loading && !submitting"
+        class="flex items-center justify-center py-12"
+      >
+        <Loader2 class="h-8 w-8 animate-spin text-gray-400" />
+        <span class="ml-2 text-gray-600">Loading users...</span>
+      </div>
+
       <!-- Users Table -->
-      <div class="rounded-lg border bg-white shadow-sm overflow-hidden">
+      <div v-else class="rounded-lg border bg-white shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -253,7 +396,7 @@ updateFilteredUsers();
                 <th
                   class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
                 >
-                  Username
+                  Name
                 </th>
                 <th
                   class="hidden sm:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
@@ -263,12 +406,7 @@ updateFilteredUsers();
                 <th
                   class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
                 >
-                  Privilege
-                </th>
-                <th
-                  class="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
-                >
-                  System
+                  Role
                 </th>
                 <th
                   class="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide"
@@ -285,7 +423,7 @@ updateFilteredUsers();
               >
                 <td class="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900">
                   <div class="flex flex-col">
-                    <span>{{ user.username }}</span>
+                    <span>{{ getUserDisplayName(user) }}</span>
                     <span class="text-xs text-gray-500 sm:hidden">{{
                       user.email
                     }}</span>
@@ -300,21 +438,10 @@ updateFilteredUsers();
                   <span
                     :class="[
                       'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                      user.privilege === 'Admin'
-                        ? 'bg-red-100 text-red-800'
-                        : user.privilege === 'Editor'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-green-100 text-green-800',
+                      user.admin ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800',
                     ]"
                   >
-                    {{ user.privilege }}
-                  </span>
-                </td>
-                <td class="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm">
-                  <span
-                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {{ user.system }}
+                    {{ user.admin ? "Admin" : "User" }}
                   </span>
                 </td>
                 <td class="px-4 sm:px-6 py-4 text-right">
@@ -369,19 +496,36 @@ updateFilteredUsers();
           <h2 class="text-lg font-semibold text-gray-900">Create User</h2>
         </div>
 
+        <!-- Error Message -->
+        <div
+          v-if="error"
+          class="mx-4 sm:mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg"
+        >
+          <p class="text-sm text-red-600">{{ error }}</p>
+        </div>
+
+        <!-- Success Message -->
+        <div
+          v-if="successMessage"
+          class="mx-4 sm:mx-6 mt-4 p-3 bg-green-50 border border-green-200 rounded-lg"
+        >
+          <p class="text-sm text-green-600">{{ successMessage }}</p>
+        </div>
+
         <!-- Modal Body -->
-        <div class="px-4 sm:px-6 py-4 space-y-4">
+        <form @submit.prevent="addUser" class="px-4 sm:px-6 py-4 space-y-4">
           <div>
             <label
-              for="add-username"
+              for="add-name"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >Username</label
+              >Name *</label
             >
             <input
-              id="add-username"
-              v-model="formData.username"
+              id="add-name"
+              v-model="formData.name"
               type="text"
-              placeholder="Enter username"
+              placeholder="Enter full name"
+              required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
@@ -389,13 +533,14 @@ updateFilteredUsers();
             <label
               for="add-email"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >Email</label
+              >Email *</label
             >
             <input
               id="add-email"
               v-model="formData.email"
               type="email"
               placeholder="Enter email address"
+              required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
@@ -403,77 +548,64 @@ updateFilteredUsers();
             <label
               for="add-password"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >Password</label
+              >Password *</label
             >
             <input
               id="add-password"
               v-model="formData.password"
               type="password"
-              placeholder="Enter a strong password"
+              placeholder="Enter a strong password (min 6 characters)"
+              required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
           <div>
             <label
-              for="add-privilege"
+              for="add-password-confirmation"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >App Privilege</label
+              >Confirm Password *</label
             >
-            <select
-              id="add-privilege"
-              v-model="formData.privilege"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            >
-              <option value="">Select a privilege</option>
-              <option
-                v-for="privilege in availablePrivileges"
-                :key="privilege.id"
-                :value="privilege.id"
-              >
-                {{ privilege.name }}
-              </option>
-            </select>
+            <input
+              id="add-password-confirmation"
+              v-model="formData.password_confirmation"
+              type="password"
+              placeholder="Re-enter password"
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            />
           </div>
-          <div>
-            <label
-              for="add-system"
-              class="block text-sm font-medium text-gray-900 mb-1"
-              >System Assignment</label
-            >
-            <select
-              id="add-system"
-              v-model="formData.system"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            >
-              <option value="">Select a system</option>
-              <option
-                v-for="system in availableSystems"
-                :key="system.id"
-                :value="system.name"
-              >
-                {{ system.name }}
-              </option>
-            </select>
+          <div class="flex items-center">
+            <input
+              id="add-admin"
+              v-model="formData.admin"
+              type="checkbox"
+              class="h-4 w-4 text-black border-gray-300 rounded focus:ring-black"
+            />
+            <label for="add-admin" class="ml-2 text-sm text-gray-900">
+              Admin User
+            </label>
           </div>
-        </div>
 
-        <!-- Modal Footer -->
-        <div
-          class="border-t px-4 sm:px-6 py-4 flex gap-2 sm:gap-3 justify-end sticky bottom-0 bg-white"
-        >
-          <button
-            @click="closeAddModal"
-            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
-          >
-            Cancel
-          </button>
-          <button
-            @click="addUser"
-            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black"
-          >
-            Create User
-          </button>
-        </div>
+          <!-- Modal Footer -->
+          <div class="flex gap-2 sm:gap-3 justify-end pt-4">
+            <button
+              type="button"
+              @click="closeAddModal"
+              :disabled="submitting"
+              class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              :disabled="submitting"
+              class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
+              {{ submitting ? "Creating..." : "Create User" }}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -490,19 +622,36 @@ updateFilteredUsers();
           <h2 class="text-lg font-semibold text-gray-900">Edit User</h2>
         </div>
 
+        <!-- Error Message -->
+        <div
+          v-if="error"
+          class="mx-4 sm:mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg"
+        >
+          <p class="text-sm text-red-600">{{ error }}</p>
+        </div>
+
+        <!-- Success Message -->
+        <div
+          v-if="successMessage"
+          class="mx-4 sm:mx-6 mt-4 p-3 bg-green-50 border border-green-200 rounded-lg"
+        >
+          <p class="text-sm text-green-600">{{ successMessage }}</p>
+        </div>
+
         <!-- Modal Body -->
-        <div class="px-4 sm:px-6 py-4 space-y-4">
+        <form @submit.prevent="updateUser" class="px-4 sm:px-6 py-4 space-y-4">
           <div>
             <label
-              for="edit-username"
+              for="edit-name"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >Username</label
+              >Name *</label
             >
             <input
-              id="edit-username"
-              v-model="formData.username"
+              id="edit-name"
+              v-model="formData.name"
               type="text"
-              placeholder="Enter username"
+              placeholder="Enter full name"
+              required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
@@ -510,13 +659,14 @@ updateFilteredUsers();
             <label
               for="edit-email"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >Email</label
+              >Email *</label
             >
             <input
               id="edit-email"
               v-model="formData.email"
               type="email"
               placeholder="Enter email address"
+              required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
@@ -524,77 +674,62 @@ updateFilteredUsers();
             <label
               for="edit-password"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >Password</label
+              >New Password (leave blank to keep current)</label
             >
             <input
               id="edit-password"
               v-model="formData.password"
               type="password"
-              placeholder="Enter a strong password"
+              placeholder="Enter new password (optional)"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
           <div>
             <label
-              for="edit-privilege"
+              for="edit-password-confirmation"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >App Privilege</label
+              >Confirm New Password</label
             >
-            <select
-              id="edit-privilege"
-              v-model="formData.privilege"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            >
-              <option value="">Select a privilege</option>
-              <option
-                v-for="privilege in availablePrivileges"
-                :key="privilege.id"
-                :value="privilege.name"
-              >
-                {{ privilege.name }}
-              </option>
-            </select>
+            <input
+              id="edit-password-confirmation"
+              v-model="formData.password_confirmation"
+              type="password"
+              placeholder="Re-enter new password"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            />
           </div>
-          <div>
-            <label
-              for="edit-system"
-              class="block text-sm font-medium text-gray-900 mb-1"
-              >System Assignment</label
-            >
-            <select
-              id="edit-system"
-              v-model="formData.system"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            >
-              <option value="">Select a system</option>
-              <option
-                v-for="system in availableSystems"
-                :key="system.id"
-                :value="system.name"
-              >
-                {{ system.name }}
-              </option>
-            </select>
+          <div class="flex items-center">
+            <input
+              id="edit-admin"
+              v-model="formData.admin"
+              type="checkbox"
+              class="h-4 w-4 text-black border-gray-300 rounded focus:ring-black"
+            />
+            <label for="edit-admin" class="ml-2 text-sm text-gray-900">
+              Admin User
+            </label>
           </div>
-        </div>
 
-        <!-- Modal Footer -->
-        <div
-          class="border-t px-4 sm:px-6 py-4 flex gap-2 sm:gap-3 justify-end sticky bottom-0 bg-white"
-        >
-          <button
-            @click="closeEditModal"
-            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
-          >
-            Cancel
-          </button>
-          <button
-            @click="updateUser"
-            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black"
-          >
-            Save Changes
-          </button>
-        </div>
+          <!-- Modal Footer -->
+          <div class="flex gap-2 sm:gap-3 justify-end pt-4">
+            <button
+              type="button"
+              @click="closeEditModal"
+              :disabled="submitting"
+              class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              :disabled="submitting"
+              class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
+              {{ submitting ? "Saving..." : "Save Changes" }}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -609,12 +744,28 @@ updateFilteredUsers();
           <h2 class="text-lg font-semibold text-gray-900">Delete User</h2>
         </div>
 
+        <!-- Error Message -->
+        <div
+          v-if="error"
+          class="mx-4 sm:mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg"
+        >
+          <p class="text-sm text-red-600">{{ error }}</p>
+        </div>
+
+        <!-- Success Message -->
+        <div
+          v-if="successMessage"
+          class="mx-4 sm:mx-6 mt-4 p-3 bg-green-50 border border-green-200 rounded-lg"
+        >
+          <p class="text-sm text-green-600">{{ successMessage }}</p>
+        </div>
+
         <!-- Modal Body -->
         <div class="px-4 sm:px-6 py-4">
           <p class="text-xs sm:text-sm text-gray-600">
             Are you sure you want to delete
             <span class="font-semibold text-gray-900">{{
-              selectedUser?.username
+              getUserDisplayName(selectedUser)
             }}</span
             >? This action cannot be undone.
           </p>
@@ -624,15 +775,18 @@ updateFilteredUsers();
         <div class="border-t px-4 sm:px-6 py-4 flex gap-2 sm:gap-3 justify-end">
           <button
             @click="closeDeleteModal"
-            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
+            :disabled="submitting"
+            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             @click="deleteUser"
-            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600"
+            :disabled="submitting"
+            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-50 inline-flex items-center gap-2"
           >
-            Delete
+            <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
+            {{ submitting ? "Deleting..." : "Delete" }}
           </button>
         </div>
       </div>
