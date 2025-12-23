@@ -8,6 +8,7 @@ import {
 } from 'lucide-vue-next'
 import { ref, onMounted, onUnmounted } from 'vue'
 
+
 defineProps({
     user: Object,
     isCollapsed: Boolean
