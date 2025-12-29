@@ -73,10 +73,10 @@ const data = {
                     title: 'Users',
                     url: '/admin/dashboard/create-user',
                 },
-                // {
-                //     title: 'Create Department',
-                //     url: '/admin/dashboard/create-department',
-                // },
+                {
+                    title: 'Assign Keys to Users',
+                    url: '/admin/dashboard/assign-keys-to-users',
+                },
                 // {
                 //     title: 'System Assignments',
                 //     url: '/admin/dashboard/system-assignments',
@@ -88,21 +88,21 @@ const data = {
             url: '#',
             icon: Settings2,
             items: [
-                // {
-                //     title: 'Create User Privileges',
-                //     url: '/admin/dashboard/create-privileges',
-                // },
                 {
                     title: 'Create System Passwords Policy',
-                    url: '/admin/dashboard/create-system-passwords-policy-category',
+                    url: '/admin/dashboard/create-system-passwords-policy',
                 },
                 {
                     title: 'Create System Category',
-                    url: '/admin/dashboard/create-system-passwords-category',
+                    url: '/admin/dashboard/create-system-category',
                 },
                 {
-                    title: 'Create System Passwords',
-                    url: '/admin/dashboard/create-system-passwords',
+                    title: 'Create System/App',
+                    url: '/admin/dashboard/create-system',
+                },
+                {
+                    title: 'Create Passwords For Systems/Apps',
+                    url: '/admin/dashboard/create-passwords-for-systems',
                 },
                 
             ],
