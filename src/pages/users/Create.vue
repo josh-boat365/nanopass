@@ -1,25 +1,14 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
-import { Trash2, Edit2, Plus, Eye, EyeOff, Loader2 } from "lucide-vue-next";
+import { Trash2, Edit2, Plus, Eye, EyeOff, Loader2, ChevronLeft, ChevronRight } from "lucide-vue-next";
 import BaseLayout from "@/layouts/AppLayout.vue";
 import { storeToRefs } from "pinia";
 import { useUserStore } from "@/stores/useUserStore";
+import { useToast } from "@/composables/useToast";
 
 const userStore = useUserStore();
 const { user, users, loading, error } = storeToRefs(userStore);
-
-// Sample privileges (would typically come from an API)
-const availablePrivileges = ref([
-  { id: 1, name: "Admin" },
-  { id: 2, name: "Editor" },
-  { id: 3, name: "Viewer" },
-]);
-
-// Sample systems (would typically come from an API)
-const availableSystems = ref([
-  { id: 1, name: "Main Production" },
-  { id: 2, name: "Staging Environment" },
-]);
+const { success, error: showError } = useToast();
 
 // State management
 const showAddModal = ref(false);
@@ -30,16 +19,18 @@ const selectedUser = ref(null);
 const searchQuery = ref("");
 const submitting = ref(false);
 const successMessage = ref("");
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
+const itemsPerPageOptions = [10, 25, 50, 100];
 
 // Form data
 const formData = ref({
-  name: "",
+  username: "",
   email: "",
   password: "",
   password_confirmation: "",
+  department_id: null,
   admin: false,
-  privilege: "",
-  system: "",
 });
 
 // Load users on component mount
@@ -53,6 +44,14 @@ const loadUsers = async () => {
     await userStore.getAllUsers();
   } catch (err) {
     console.error("Error loading users:", err);
+    // Gracefully handle errors - show toast but don't crash
+    if (err.status === 401) {
+      showError("You are not authenticated. Please login again.");
+    } else if (err.status === 403) {
+      showError("You do not have permission to view users.");
+    } else {
+      showError("Failed to load users. Please try again later.");
+    }
   }
 };
 
@@ -64,11 +63,57 @@ const filteredUsers = computed(() => {
   const query = searchQuery.value.toLowerCase();
   return users.value.filter(
     (user) =>
-      user.name?.toLowerCase().includes(query) ||
-      user.email?.toLowerCase().includes(query) ||
-      user.username?.toLowerCase().includes(query)
+      user.username?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query)
   );
 });
+
+// Computed: Total pages
+const totalPages = computed(() => {
+  return Math.ceil(filteredUsers.value.length / itemsPerPage.value);
+});
+
+// Computed: Paginated users
+const paginatedUsers = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value;
+  const end = start + itemsPerPage.value;
+  return filteredUsers.value.slice(start, end);
+});
+
+// Computed: Pagination info
+const paginationInfo = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value + 1;
+  const end = Math.min(currentPage.value * itemsPerPage.value, filteredUsers.value.length);
+  return `${start}-${end} of ${filteredUsers.value.length}`;
+});
+
+// Pagination methods
+const handleSearch = () => {
+  currentPage.value = 1;
+};
+
+const handleItemsPerPageChange = (value) => {
+  itemsPerPage.value = value;
+  currentPage.value = 1;
+};
+
+const goToPage = (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+};
+
+const prevPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--;
+  }
+};
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++;
+  }
+};
 
 // Toggle password visibility
 const togglePasswordVisibility = (userId) => {
@@ -78,13 +123,12 @@ const togglePasswordVisibility = (userId) => {
 // Open Add Modal
 const openAddModal = () => {
   formData.value = {
-    name: "",
+    username: "",
     email: "",
     password: "",
     password_confirmation: "",
+    department_id: null,
     admin: false,
-    privilege: "",
-    system: "",
   };
   successMessage.value = "";
   userStore.clearError();
@@ -95,13 +139,12 @@ const openAddModal = () => {
 const closeAddModal = () => {
   showAddModal.value = false;
   formData.value = {
-    name: "",
+    username: "",
     email: "",
     password: "",
     password_confirmation: "",
+    department_id: null,
     admin: false,
-    privilege: "",
-    system: "",
   };
   successMessage.value = "";
   userStore.clearError();
@@ -110,19 +153,16 @@ const closeAddModal = () => {
 // Open Edit Modal
 const openEditModal = async (userToEdit) => {
   try {
-    // Fetch full user details
-    const result = await userStore.getUserById(userToEdit.id);
-    const userData = result.data || result;
+    const userData = await userStore.getUserById(userToEdit.id);
     
     selectedUser.value = userData;
     formData.value = {
-      name: userData.name || userData.username || "",
+      username: userData.username || "",
       email: userData.email || "",
       password: "",
       password_confirmation: "",
+      department_id: userData.department_id || null,
       admin: userData.admin || false,
-      privilege: userData.privilege || "",
-      system: userData.system || "",
     };
     successMessage.value = "";
     userStore.clearError();
@@ -137,13 +177,12 @@ const closeEditModal = () => {
   showEditModal.value = false;
   selectedUser.value = null;
   formData.value = {
-    name: "",
+    username: "",
     email: "",
     password: "",
     password_confirmation: "",
+    department_id: null,
     admin: false,
-    privilege: "",
-    system: "",
   };
   successMessage.value = "";
   userStore.clearError();
@@ -167,8 +206,8 @@ const closeDeleteModal = () => {
 
 // Validate form
 const validateForm = () => {
-  if (!formData.value.name.trim()) {
-    return "Name is required";
+  if (!formData.value.username.trim()) {
+    return "Username is required";
   }
   if (!formData.value.email.trim()) {
     return "Email is required";
@@ -189,7 +228,7 @@ const validateForm = () => {
 const addUser = async () => {
   const validationError = validateForm();
   if (validationError) {
-    userStore.error = validationError;
+    showError(validationError);
     return;
   }
 
@@ -198,31 +237,23 @@ const addUser = async () => {
     userStore.clearError();
 
     const userData = {
-      name: formData.value.name,
+      username: formData.value.username,
       email: formData.value.email,
       password: formData.value.password,
       password_confirmation: formData.value.password_confirmation,
+      department_id: formData.value.department_id,
       admin: formData.value.admin,
     };
 
-    // Note: If your API supports privilege and system, add them here
-    // userData.privilege = formData.value.privilege;
-    // userData.system = formData.value.system;
-
-    await userStore.register(userData);
-    
-    successMessage.value = "User created successfully!";
-    
-    // Reload users list
+    await userStore.createUser(userData);
+    success("User created successfully!");
     await loadUsers();
     
-    // Close modal after a short delay
     setTimeout(() => {
       closeAddModal();
     }, 1500);
   } catch (err) {
-    console.error("Error creating user:", err);
-    // Error is already set in the store
+    showError(err.message || "Failed to create user");
   } finally {
     submitting.value = false;
   }
@@ -232,7 +263,7 @@ const addUser = async () => {
 const updateUser = async () => {
   const validationError = validateForm();
   if (validationError) {
-    userStore.error = validationError;
+    showError(validationError);
     return;
   }
 
@@ -243,35 +274,26 @@ const updateUser = async () => {
     userStore.clearError();
 
     const userData = {
-      name: formData.value.name,
+      username: formData.value.username,
       email: formData.value.email,
+      department_id: formData.value.department_id,
       admin: formData.value.admin,
     };
 
-    // Only include password if it's being changed
     if (formData.value.password.trim()) {
       userData.password = formData.value.password;
       userData.password_confirmation = formData.value.password_confirmation;
     }
 
-    // Note: If your API supports privilege and system, add them here
-    // userData.privilege = formData.value.privilege;
-    // userData.system = formData.value.system;
-
     await userStore.updateUser(selectedUser.value.id, userData);
-    
-    successMessage.value = "User updated successfully!";
-    
-    // Reload users list
+    success("User updated successfully!");
     await loadUsers();
     
-    // Close modal after a short delay
     setTimeout(() => {
       closeEditModal();
     }, 1500);
   } catch (err) {
-    console.error("Error updating user:", err);
-    // Error is already set in the store
+    showError(err.message || "Failed to update user");
   } finally {
     submitting.value = false;
   }
@@ -286,16 +308,13 @@ const deleteUser = async () => {
     userStore.clearError();
 
     await userStore.deleteUser(selectedUser.value.id);
+    success("User deleted successfully!");
     
-    successMessage.value = "User deleted successfully!";
-    
-    // Close modal after a short delay
     setTimeout(() => {
       closeDeleteModal();
     }, 1000);
   } catch (err) {
-    console.error("Error deleting user:", err);
-    // Error is already set in the store
+    showError(err.message || "Failed to delete user");
   } finally {
     submitting.value = false;
   }
@@ -318,7 +337,7 @@ const getPrivilegeBadgeColor = (privilege) => {
 
 // Get user display name
 const getUserDisplayName = (user) => {
-  return user.name || user.username || user.email;
+  return user.username || user.email;
 };
 </script>
 
@@ -366,6 +385,7 @@ const getUserDisplayName = (user) => {
         <div class="flex-1 w-full">
           <input
             v-model="searchQuery"
+            @input="handleSearch"
             type="text"
             placeholder="Search users by name or email..."
             class="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
@@ -417,7 +437,7 @@ const getUserDisplayName = (user) => {
             </thead>
             <tbody class="divide-y">
               <tr
-                v-for="user in filteredUsers"
+                v-for="user in paginatedUsers"
                 :key="user.id"
                 class="hover:bg-gray-50 transition-colors"
               >
@@ -465,6 +485,82 @@ const getUserDisplayName = (user) => {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination -->
+        <div v-if="totalPages > 1" class="border-t px-4 sm:px-6 py-4 bg-gray-50">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2 text-sm text-gray-600">
+              <span>Show</span>
+              <select
+                :value="itemsPerPage"
+                @change="handleItemsPerPageChange(Number($event.target.value))"
+                class="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black"
+              >
+                <option v-for="option in itemsPerPageOptions" :key="option" :value="option">
+                  {{ option }}
+                </option>
+              </select>
+              <span>records</span>
+            </div>
+
+            <div class="text-sm text-gray-600">
+              Showing {{ paginationInfo }}
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                @click="prevPage"
+                :disabled="currentPage === 1"
+                :class="[
+                  'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                  currentPage === 1
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                ]"
+              >
+                <ChevronLeft class="h-4 w-4" />
+                <span class="hidden sm:inline ml-1">Previous</span>
+              </button>
+
+              <div class="flex items-center gap-1">
+                <template v-for="page in totalPages" :key="page">
+                  <button
+                    v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
+                    @click="goToPage(page)"
+                    :class="[
+                      'px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                      page === currentPage
+                        ? 'bg-black text-white'
+                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                    ]"
+                  >
+                    {{ page }}
+                  </button>
+                  <span
+                    v-else-if="page === currentPage - 2 || page === currentPage + 2"
+                    class="px-2 text-gray-500"
+                  >
+                    ...
+                  </span>
+                </template>
+              </div>
+
+              <button
+                @click="nextPage"
+                :disabled="currentPage === totalPages"
+                :class="[
+                  'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                  currentPage === totalPages
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                ]"
+              >
+                <span class="hidden sm:inline mr-1">Next</span>
+                <ChevronRight class="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Empty state -->
@@ -516,15 +612,15 @@ const getUserDisplayName = (user) => {
         <form @submit.prevent="addUser" class="px-4 sm:px-6 py-4 space-y-4">
           <div>
             <label
-              for="add-name"
+              for="add-username"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >Name *</label
+              >Username *</label
             >
             <input
-              id="add-name"
-              v-model="formData.name"
+              id="add-username"
+              v-model="formData.username"
               type="text"
-              placeholder="Enter full name"
+              placeholder="Enter username"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
@@ -642,15 +738,15 @@ const getUserDisplayName = (user) => {
         <form @submit.prevent="updateUser" class="px-4 sm:px-6 py-4 space-y-4">
           <div>
             <label
-              for="edit-name"
+              for="edit-username"
               class="block text-sm font-medium text-gray-900 mb-1"
-              >Name *</label
+              >Username *</label
             >
             <input
-              id="edit-name"
-              v-model="formData.name"
+              id="edit-username"
+              v-model="formData.username"
               type="text"
-              placeholder="Enter full name"
+              placeholder="Enter username"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
