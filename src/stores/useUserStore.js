@@ -34,42 +34,49 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
-    // Register
-    const register = async (userData) => {
+    // Register (self-registration with authentication)
+    const register = async (userData, shouldAuthenticate = true) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, userData)
-            user.value = response.data.user
-            token.value = response.data.token
-            localStorage.setItem('user', JSON.stringify(response.data.user))
-            localStorage.setItem('auth_token', response.data.token)
-            return response.data
+            const { data } = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, userData)
+
+            // Only authenticate if flag is true (self-registration case)
+            if (shouldAuthenticate && data.token) {
+                user.value = data.user
+                token.value = data.token
+                localStorage.setItem('user', JSON.stringify(data.user))
+                localStorage.setItem('auth_token', data.token)
+            }
+
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Registration failed'
+            error.value = err.message || 'Registration failed'
             throw err
         } finally {
             loading.value = false
         }
     }
 
+    // Create User (admin creating user without authentication)
+    const createUser = async (userData) => {
+        // Use register but don't authenticate the user
+        return await register(userData, false)
+    }
+
     // Login
     const login = async (credentials) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials)
-
-            console.log('Full API Response:', response)
-            console.log('Response data:', response.data)
-
-            user.value = response.data.user
-            token.value = response.data.token
-            localStorage.setItem('user', JSON.stringify(response.data.user))
-            localStorage.setItem('auth_token', response.data.token)
-            return response.data
+            const { data } = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials)
+            user.value = data.user
+            token.value = data.token
+            localStorage.setItem('user', JSON.stringify(data.user))
+            localStorage.setItem('auth_token', data.token)
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Login failed'
+            error.value = err.message || 'Login failed'
             throw err
         } finally {
             loading.value = false
@@ -78,13 +85,11 @@ export const useUserStore = defineStore('user', () => {
 
     // Logout
     const logout = async () => {
+        loading.value = true
         try {
-            loading.value = true
-            if (token.value) {
-                await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT)
-            }
+            if (token.value) await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT)
         } catch (err) {
-            console.error('Logout API error:', err)
+            console.error('Logout error:', err)
         } finally {
             user.value = null
             token.value = null
@@ -98,14 +103,14 @@ export const useUserStore = defineStore('user', () => {
 
     // Get All Users (LIST)
     const getAllUsers = async (params = {}) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.get(API_ENDPOINTS.USERS.LIST, { params })
-            users.value = response.data.data || response.data
-            return response.data
+            const { data } = await apiClient.get(API_ENDPOINTS.USERS.LIST, { params })
+            users.value = data || []
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Failed to fetch users'
+            error.value = err.message || 'Failed to fetch users'
             throw err
         } finally {
             loading.value = false
@@ -114,15 +119,13 @@ export const useUserStore = defineStore('user', () => {
 
     // Search Users
     const searchUsers = async (searchParams) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.get(API_ENDPOINTS.USERS.SEARCH, {
-                params: searchParams
-            })
-            return response.data
+            const { data } = await apiClient.get(API_ENDPOINTS.USERS.SEARCH, { params: searchParams })
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Search failed'
+            error.value = err.message || 'Search failed'
             throw err
         } finally {
             loading.value = false
@@ -131,14 +134,14 @@ export const useUserStore = defineStore('user', () => {
 
     // Get User by ID
     const getUserById = async (id) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.get(API_ENDPOINTS.USERS.SHOW(id))
-            currentUserDetails.value = response.data.data || response.data
-            return response.data
+            const { data } = await apiClient.get(API_ENDPOINTS.USERS.SHOW(id))
+            currentUserDetails.value = data
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Failed to fetch user'
+            error.value = err.message || 'Failed to fetch user'
             throw err
         } finally {
             loading.value = false
@@ -147,26 +150,19 @@ export const useUserStore = defineStore('user', () => {
 
     // Update User
     const updateUser = async (id, userData) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.put(API_ENDPOINTS.USERS.UPDATE(id), userData)
-
-            // Update current user if updating self
+            const { data } = await apiClient.put(API_ENDPOINTS.USERS.UPDATE(id), userData)
             if (user.value?.id === id) {
-                user.value = response.data.data || response.data.user
-                localStorage.setItem('user', JSON.stringify(user.value))
+                user.value = data
+                localStorage.setItem('user', JSON.stringify(data))
             }
-
-            // Update in users list if exists
             const index = users.value.findIndex(u => u.id === id)
-            if (index !== -1) {
-                users.value[index] = response.data.data || response.data.user
-            }
-
-            return response.data
+            if (index !== -1) users.value[index] = data
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Failed to update user'
+            error.value = err.message || 'Failed to update user'
             throw err
         } finally {
             loading.value = false
@@ -175,17 +171,14 @@ export const useUserStore = defineStore('user', () => {
 
     // Delete User
     const deleteUser = async (id) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.delete(API_ENDPOINTS.USERS.DELETE(id))
-
-            // Remove from users list
+            const { data } = await apiClient.delete(API_ENDPOINTS.USERS.DELETE(id))
             users.value = users.value.filter(u => u.id !== id)
-
-            return response.data
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Failed to delete user'
+            error.value = err.message || 'Failed to delete user'
             throw err
         } finally {
             loading.value = false
@@ -194,16 +187,13 @@ export const useUserStore = defineStore('user', () => {
 
     // Get User Audit Trails
     const getUserAuditTrails = async (id, params = {}) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.get(
-                API_ENDPOINTS.USERS.AUDIT_TRAILS(id),
-                { params }
-            )
-            return response.data
+            const { data } = await apiClient.get(API_ENDPOINTS.USERS.AUDIT_TRAILS(id), { params })
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Failed to fetch audit trails'
+            error.value = err.message || 'Failed to fetch audit trails'
             throw err
         } finally {
             loading.value = false
@@ -212,13 +202,13 @@ export const useUserStore = defineStore('user', () => {
 
     // Get User Permissions
     const getUserPermissions = async (id) => {
+        loading.value = true
+        error.value = null
         try {
-            loading.value = true
-            error.value = null
-            const response = await apiClient.get(API_ENDPOINTS.USERS.PERMISSIONS(id))
-            return response.data
+            const { data } = await apiClient.get(API_ENDPOINTS.USERS.PERMISSIONS(id))
+            return data
         } catch (err) {
-            error.value = err.response?.data?.message || 'Failed to fetch permissions'
+            error.value = err.message || 'Failed to fetch permissions'
             throw err
         } finally {
             loading.value = false
@@ -248,6 +238,7 @@ export const useUserStore = defineStore('user', () => {
 
         // Actions
         register,
+        createUser,
         login,
         logout,
         getAllUsers,
