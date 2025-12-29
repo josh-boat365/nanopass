@@ -13,12 +13,52 @@ const API_ENDPOINTS = {
     // User endpoints
     USERS: {
         LIST: '/users',
+        CREATE: '/users', // Admin creating new user (no auth)
         SEARCH: '/users/search',
         SHOW: (id) => `/users/${id}`,
         UPDATE: (id) => `/users/${id}`,
         DELETE: (id) => `/users/${id}`,
         AUDIT_TRAILS: (id) => `/users/${id}/audit-trails`,
         PERMISSIONS: (id) => `/users/${id}/permissions`,
+    },
+
+    // Policy endpoints
+    POLICIES: {
+        LIST: '/policies',
+        SHOW: (id) => `/policies/${id}`,
+        CREATE: '/policies',
+        UPDATE: (id) => `/policies/${id}`,
+        DELETE: (id) => `/policies/${id}`,
+    },
+
+    // Category endpoints
+    CATEGORIES: {
+        LIST: '/categories',
+        SHOW: (id) => `/categories/${id}`,
+        CREATE: '/categories',
+        UPDATE: (id) => `/categories/${id}`,
+        DELETE: (id) => `/categories/${id}`,
+    },
+
+    // System endpoints
+    SYSTEMS: {
+        LIST: '/systems',
+        SHOW: (id) => `/systems/${id}`,
+        CREATE: '/systems',
+        UPDATE: (id) => `/systems/${id}`,
+        DELETE: (id) => `/systems/${id}`,
+        GET_PASSWORD: (id) => `/systems/${id}/password`,
+    },
+
+    // Password endpoints
+    PASSWORDS: {
+        LIST: '/passwords',
+        SHOW: (id) => `/passwords/${id}`,
+        CREATE: '/passwords',
+        UPDATE: (id) => `/passwords/${id}`,
+        DELETE: (id) => `/passwords/${id}`,
+        BY_SYSTEM: (systemId) => `/passwords/system/${systemId}`,
+        TOGGLE_ACTIVE: (id) => `/passwords/${id}/toggle-active`,
     },
 };
 
