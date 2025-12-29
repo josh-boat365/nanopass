@@ -14,15 +14,31 @@ import {
   AlertCircle,
 } from "lucide-vue-next";
 import { useRouter } from "vue-router";
+import { storeToRefs } from 'pinia';
+import { useUserStore } from '@/stores/useUserStore';
 
 const router = useRouter();
+const userStore = useUserStore();
+
+
+
+
+// Get reactive user data
+const { user, isAuthenticated, isAdmin } = storeToRefs(userStore)
+console.log("User Store:", user);
 
 // User data
 const userData = ref({
-  name: "John Doe",
-  email: "john.doe@company.com",
-  role: "Senior Developer",
+  name: user.value?.username || "NanoPass User",
+  email: user.value?.email || "testuser@nanopass.com",
 });
+
+// Check authentication on mount
+// onMounted(() => {
+//     if (!isAuthenticated.value) {
+//         router.push('/login')
+//     }
+// });
 
 // Personal keys data
 const personalKeys = ref([
@@ -219,6 +235,7 @@ const formatDate = (dateString) => {
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
           Welcome back, {{ userData.name }}
         </h1>
+        <span></span>
         <p class="mt-2 text-sm sm:text-base text-gray-600">
           Here's an overview of your password management dashboard
         </p>
