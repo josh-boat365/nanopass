@@ -14,9 +14,11 @@ import AuthTrails from "@/pages/dashboard/AuthTrails.vue";
 import Settings from "@/pages/dashboard/Settings.vue";
 import CreateUser from "@/pages/users/Create.vue";
 // import CreatePrivileges from "@/pages/privileges/Index.vue";
-import CreateSystemPasswordCategory from "@/pages/system-setup/CreateSystemCategory.vue";
-import CreateSystemPasswordPolicyCategory from "@/pages/system-setup/CreateSystemPasswordPolicyCategory.vue";
-import CreateSystemPassword from "@/pages/system-setup/Index.vue";
+import CreateSystemPasswordPolicy from "@/pages/system-setup/CreateSystemPasswordPolicy.vue";
+import CreateSystemCategory from "@/pages/system-setup/CreateSystemCategory.vue";
+import CreateSystem from "@/pages/system-setup/CreateSystem.vue";
+import CreateSystemPassword from "../pages/system-setup/CreateSystemPassword.vue";
+import AssignKeysToUsers from "../pages/users/AssignKeysToUser.vue";
 
 const routes = [{
     path: "/",
@@ -96,26 +98,36 @@ const routes = [{
       requiresAuth: true
     }
   },
-  // {
-  //   path: "/admin/dashboard/create-privileges",
-  //   component: CreatePrivileges
-  // },
   {
-    path: "/admin/dashboard/create-system-passwords-category",
-    component: CreateSystemPasswordCategory,
+    path: "/admin/dashboard/assign-keys-to-users",
+    component: AssignKeysToUsers,
     meta: {
       requiresAuth: true
     }
   },
   {
-    path: "/admin/dashboard/create-system-passwords-policy-category",
-    component: CreateSystemPasswordPolicyCategory,
+    path: "/admin/dashboard/create-system-passwords-policy",
+    component: CreateSystemPasswordPolicy,
     meta: {
       requiresAuth: true
     }
   },
   {
-    path: "/admin/dashboard/create-system-passwords",
+    path: "/admin/dashboard/create-system-category",
+    component: CreateSystemCategory,
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: "/admin/dashboard/create-system",
+    component: CreateSystem,
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: "/admin/dashboard/create-passwords-for-systems",
     component: CreateSystemPassword,
     meta: {
       requiresAuth: true
