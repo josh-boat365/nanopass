@@ -19,120 +19,128 @@ import CreateSystemCategory from "@/pages/system-setup/CreateSystemCategory.vue"
 import CreateSystem from "@/pages/system-setup/CreateSystem.vue";
 import CreateSystemPassword from "../pages/system-setup/CreateSystemPassword.vue";
 import AssignKeysToUsers from "../pages/users/AssignKeysToUser.vue";
+import AssignSystemsToUser from "../pages/system-setup/AssignSystemsToUser.vue";
 
 const routes = [{
-    path: "/",
-    component: Login,
-    meta: {
-      requiresGuest: true
-    }
-  },
-  {
-    path: "/login",
-    component: Login,
-    meta: {
-      requiresGuest: true
-    }
-  },
-  {
-    path: "/register",
-    component: Register,
-    meta: {
-      requiresGuest: true
-    }
-  },
-  {
-    path: "/user/dashboard",
-    component: UserDashboard,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/user/dashboard2",
-    component: UserDashboard2,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/user/assigned-keys",
-    component: UserAssignedKeys,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/user/personal-keys",
-    component: UserPersonalKeys,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/dashboard/settings",
-    component: Settings,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/admin/dashboard",
-    component: Dashboard,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/admin/dashboard/auth-trails",
-    component: AuthTrails,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  
-  {
-    path: "/admin/dashboard/create-user",
-    component: CreateUser,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/admin/dashboard/assign-keys-to-users",
-    component: AssignKeysToUsers,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/admin/dashboard/create-system-passwords-policy",
-    component: CreateSystemPasswordPolicy,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/admin/dashboard/create-system-category",
-    component: CreateSystemCategory,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/admin/dashboard/create-system",
-    component: CreateSystem,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: "/admin/dashboard/create-passwords-for-systems",
-    component: CreateSystemPassword,
-    meta: {
-      requiresAuth: true
-    }
-  },
+  path: "/",
+  component: Login,
+  meta: {
+    requiresGuest: true
+  }
+},
+{
+  path: "/login",
+  component: Login,
+  meta: {
+    requiresGuest: true
+  }
+},
+{
+  path: "/register",
+  component: Register,
+  meta: {
+    requiresGuest: true
+  }
+},
+{
+  path: "/user/dashboard",
+  component: UserDashboard,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/user/dashboard2",
+  component: UserDashboard2,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/user/assigned-keys",
+  component: UserAssignedKeys,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/user/personal-keys",
+  component: UserPersonalKeys,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/dashboard/settings",
+  component: Settings,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/admin/dashboard",
+  component: Dashboard,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/admin/dashboard/auth-trails",
+  component: AuthTrails,
+  meta: {
+    requiresAuth: true
+  }
+},
+
+{
+  path: "/admin/dashboard/create-user",
+  component: CreateUser,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/admin/dashboard/assign-keys-to-users",
+  component: AssignKeysToUsers,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/admin/dashboard/create-system-passwords-policy",
+  component: CreateSystemPasswordPolicy,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/admin/dashboard/create-system-category",
+  component: CreateSystemCategory,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/admin/dashboard/create-system",
+  component: CreateSystem,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/admin/dashboard/create-passwords-for-systems",
+  component: CreateSystemPassword,
+  meta: {
+    requiresAuth: true
+  }
+},
+{
+  path: "/admin/dashboard/assign-systems-to-users",
+  component: AssignSystemsToUser,
+  meta: {
+    requiresAuth: true
+  }
+},
 ]
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
