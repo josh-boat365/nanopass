@@ -60,6 +60,18 @@ const API_ENDPOINTS = {
         BY_SYSTEM: (systemId) => `/passwords/system/${systemId}`,
         TOGGLE_ACTIVE: (id) => `/passwords/${id}/toggle-active`,
     },
+
+    // Permission endpoints
+    PERMISSIONS: {
+        LIST: '/permissions',
+        SHOW: (id) => `/permissions/${id}`,
+        CREATE: '/permissions',
+        UPDATE: (id) => `/permissions/${id}`,
+        DELETE: (id) => `/permissions/${id}`,
+        BY_USER: (userId) => `/permissions/user/${userId}`,
+        BY_SYSTEM: (systemId) => `/permissions/system/${systemId}`,
+        ACTIVE: '/permissions/active',
+    },
 };
 
 const API_CONFIG = {

@@ -75,7 +75,8 @@ const data = {
                 },
                 {
                     title: 'Assign Keys to Users',
-                    url: '/admin/dashboard/assign-keys-to-users',
+                    // url: '/admin/dashboard/assign-keys-to-users',
+                    url: '/admin/dashboard/assign-systems-to-users',
                 },
                 // {
                 //     title: 'System Assignments',
