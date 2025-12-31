@@ -2,6 +2,7 @@
 
 import axios from 'axios';
 import { API_CONFIG } from '@/config/apiConfig';
+import { useUserStore } from '@/stores/useUserStore';
 
 // Create axios instance with base configuration
 const apiClient = axios.create(API_CONFIG);
@@ -39,11 +40,10 @@ apiClient.interceptors.response.use(
         const originalRequest = error.config;
 
         // Handle 401 Unauthorized errors (token expired or invalid)
-        if (error.response ?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
-            // Import store dynamically to avoid circular dependency
-            const { useUserStore } = await import('@/stores/useUserStore');
+            // Use store to clear authentication data
             const userStore = useUserStore();
 
             // Clear authentication data using store
@@ -56,28 +56,28 @@ apiClient.interceptors.response.use(
         }
 
         // Handle 403 Forbidden errors
-        if (error.response ?.status === 403) {
+        if (error.response?.status === 403) {
             console.error('Access forbidden:', error.response.data);
             // You can redirect to a "not authorized" page or show a message
         }
 
         // Handle 404 Not Found errors
-        if (error.response ?.status === 404) {
+        if (error.response?.status === 404) {
             console.error('Resource not found:', error.response.data);
         }
 
         // Handle 500 Server errors
-        if (error.response ?.status === 500) {
+        if (error.response?.status === 500) {
             console.error('Server error:', error.response.data);
         }
 
         // Format error for easier handling in components
-        const errorMessage = error.response ?.data ?.message || error.message || 'An error occurred';
+        const errorMessage = error.response?.data?.message || error.message || 'An error occurred';
 
         return Promise.reject({
             message: errorMessage,
-            status: error.response ?.status,
-            data: error.response ?.data,
+            status: error.response?.status,
+            data: error.response?.data,
             originalError: error
         });
     }
