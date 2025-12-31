@@ -8,6 +8,8 @@ const API_ENDPOINTS = {
         REGISTER: '/register',
         LOGIN: '/login',
         LOGOUT: '/logout',
+        VERIFY_PASSWORD: '/verify-password',
+        CHANGE_PASSWORD: '/change-password',
     },
 
     // User endpoints
