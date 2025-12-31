@@ -1,6 +1,6 @@
 <script setup>
 import BaseLayout from "@/layouts/AppLayout.vue";
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import {
   Eye,
   EyeOff,
@@ -12,7 +12,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Loader2,
 } from "lucide-vue-next";
+import apiClient from "@/services/apiClient";
+import { API_ENDPOINTS } from "@/config/apiConfig";
+import { useToast } from "@/composables/useToast";
+
+const { success, error: showError } = useToast();
 
 const showPasswordModal = ref(false);
 const showCreateModal = ref(false);
@@ -26,54 +32,52 @@ const showPassword = ref(false);
 const searchQuery = ref("");
 const currentPage = ref(1);
 const itemsPerPage = 15;
+const loading = ref(false);
+const submitting = ref(false);
+const verifyingPassword = ref(false);
 
 // Form data for create/edit
 const formData = ref({
-  systemName: "",
+  keyname: "",
   description: "",
-  password: "",
+  key: "",
 });
 
 const formErrors = ref({
-  systemName: "",
+  keyname: "",
   description: "",
-  password: "",
+  key: "",
 });
 
-// Sample personal keys data
-const personalKeys = ref([
-  {
-    id: 1,
-    systemName: "GitHub Account",
-    description: "Personal GitHub repository access",
-    password: "MyGitH@b2024!",
-    createdAt: "2024-08-10",
-  },
-  {
-    id: 2,
-    systemName: "AWS Console",
-    description: "AWS management console login",
-    password: "AwsC0ns0le#Secure",
-    createdAt: "2024-09-15",
-  },
-  {
-    id: 3,
-    systemName: "Email Account",
-    description: "Personal email access credentials",
-    password: "Em@il123Pass",
-    createdAt: "2024-06-01",
-  },
-  {
-    id: 4,
-    systemName: "LinkedIn Profile",
-    description: "LinkedIn professional account",
-    password: "Link3dIn!2024",
-    createdAt: "2024-06-20",
-  },
-]);
+// Personal keys data from API
+const personalKeys = ref([]);
 
 const maskPassword = (password) => {
   return "•".repeat(12);
+};
+
+// ========================================
+// LIFECYCLE & DATA LOADING
+// ========================================
+
+onMounted(async () => {
+  await loadPersonalKeys();
+});
+
+const loadPersonalKeys = async () => {
+  loading.value = true;
+  try {
+    console.log("📥 Loading personal keys...");
+    const response = await apiClient.get("/personal-keys");
+    personalKeys.value = response.data.data || response.data || [];
+    console.log("✅ Personal keys loaded:", personalKeys.value.length);
+  } catch (err) {
+    console.error("❌ Error loading personal keys:", err);
+    showError("Failed to load personal keys");
+    personalKeys.value = [];
+  } finally {
+    loading.value = false;
+  }
 };
 
 // Computed: Filtered keys based on search
@@ -84,8 +88,8 @@ const filteredKeys = computed(() => {
   const query = searchQuery.value.toLowerCase();
   return personalKeys.value.filter(
     (key) =>
-      key.systemName.toLowerCase().includes(query) ||
-      key.description.toLowerCase().includes(query)
+      key.keyname.toLowerCase().includes(query) ||
+      (key.description && key.description.toLowerCase().includes(query))
   );
 });
 
@@ -125,13 +129,40 @@ const handleViewPassword = (password) => {
   showPassword.value = false;
 };
 
-const handleVerifyPassword = () => {
-  // Simulate password verification (in real app, this would be an API call)
-  if (accountPassword.value === "demo123") {
-    passwordError.value = "";
-    revealedPassword.value = selectedPassword.value;
-  } else {
-    passwordError.value = "Incorrect account password. Please try again.";
+const handleVerifyPassword = async () => {
+  if (!accountPassword.value.trim()) {
+    passwordError.value = "Please enter your password";
+    return;
+  }
+
+  verifyingPassword.value = true;
+  passwordError.value = "";
+
+  try {
+    // Call API to verify password
+    const endpoint =
+      API_ENDPOINTS.AUTH?.VERIFY_PASSWORD || "/verify-password";
+    const response = await apiClient.post(endpoint, {
+      password: accountPassword.value,
+    });
+
+    // Check if password verification was successful (backend returns true/false)
+    if (response.data.success === true || response.data.success === 1) {
+      // Password verified successfully - show the key details
+      revealedPassword.value = selectedPassword.value;
+      success("Password verified!");
+      // Clear password field for security
+      accountPassword.value = "";
+    } else if (response.data.success === false || response.data.success === 0) {
+      // Password verification failed
+      passwordError.value = "Invalid password. Please try again.";
+    }
+  } catch (err) {
+    console.error("Password verification failed:", err);
+    passwordError.value =
+      err.response?.data?.message || "Invalid password. Please try again.";
+  } finally {
+    verifyingPassword.value = false;
   }
 };
 
@@ -150,27 +181,27 @@ const handleCloseModal = () => {
 
 const resetForm = () => {
   formData.value = {
-    systemName: "",
+    keyname: "",
     description: "",
-    password: "",
+    key: "",
   };
   formErrors.value = {
-    systemName: "",
+    keyname: "",
     description: "",
-    password: "",
+    key: "",
   };
 };
 
 const validateForm = () => {
   let isValid = true;
   formErrors.value = {
-    systemName: "",
+    keyname: "",
     description: "",
-    password: "",
+    key: "",
   };
 
-  if (!formData.value.systemName.trim()) {
-    formErrors.value.systemName = "System name is required";
+  if (!formData.value.keyname.trim()) {
+    formErrors.value.keyname = "Key name is required";
     isValid = false;
   }
 
@@ -179,57 +210,76 @@ const validateForm = () => {
     isValid = false;
   }
 
-  if (!formData.value.password.trim()) {
-    formErrors.value.password = "Password is required";
+  if (!formData.value.key.trim()) {
+    formErrors.value.key = "Key is required";
     isValid = false;
-  } else if (formData.value.password.length < 8) {
-    formErrors.value.password = "Password must be at least 8 characters";
+  } else if (formData.value.key.length < 8) {
+    formErrors.value.key = "Key must be at least 8 characters";
     isValid = false;
   }
 
   return isValid;
 };
 
-const handleCreatePassword = () => {
+const handleCreatePassword = async () => {
   if (!validateForm()) return;
 
-  const newPassword = {
-    id: Date.now(),
-    systemName: formData.value.systemName,
-    description: formData.value.description,
-    password: formData.value.password,
-    createdAt: new Date().toISOString().split("T")[0],
-  };
+  submitting.value = true;
+  try {
+    console.log("📤 Creating personal key...");
+    const response = await apiClient.post("/personal-keys", {
+      keyname: formData.value.keyname,
+      description: formData.value.description,
+      key: formData.value.key,
+    });
 
-  personalKeys.value.unshift(newPassword);
-  handleCloseModal();
+    console.log("✅ Personal key created:", response.data);
+    success("Personal key created successfully!");
+    await loadPersonalKeys();
+    handleCloseModal();
+  } catch (err) {
+    console.error("❌ Error creating personal key:", err);
+    showError(err.response?.data?.message || "Failed to create personal key");
+  } finally {
+    submitting.value = false;
+  }
 };
 
 const handleEditPassword = (password) => {
   selectedPassword.value = password;
   formData.value = {
-    systemName: password.systemName,
+    keyname: password.keyname,
     description: password.description,
-    password: password.password,
+    key: password.key,
   };
   showEditModal.value = true;
 };
 
-const handleUpdatePassword = () => {
+const handleUpdatePassword = async () => {
   if (!validateForm()) return;
 
-  const index = personalKeys.value.findIndex(
-    (p) => p.id === selectedPassword.value.id
-  );
-  if (index !== -1) {
-    personalKeys.value[index] = {
-      ...personalKeys.value[index],
-      systemName: formData.value.systemName,
-      description: formData.value.description,
-      password: formData.value.password,
-    };
+  submitting.value = true;
+  try {
+    console.log("📤 Updating personal key:", selectedPassword.value.id);
+    const response = await apiClient.put(
+      `/personal-keys/${selectedPassword.value.id}`,
+      {
+        keyname: formData.value.keyname,
+        description: formData.value.description,
+        key: formData.value.key,
+      }
+    );
+
+    console.log("✅ Personal key updated:", response.data);
+    success("Personal key updated successfully!");
+    await loadPersonalKeys();
+    handleCloseModal();
+  } catch (err) {
+    console.error("❌ Error updating personal key:", err);
+    showError(err.response?.data?.message || "Failed to update personal key");
+  } finally {
+    submitting.value = false;
   }
-  handleCloseModal();
 };
 
 const handleDeletePassword = (password) => {
@@ -237,11 +287,22 @@ const handleDeletePassword = (password) => {
   showDeleteModal.value = true;
 };
 
-const handleConfirmDelete = () => {
-  personalKeys.value = personalKeys.value.filter(
-    (p) => p.id !== selectedPassword.value.id
-  );
-  handleCloseModal();
+const handleConfirmDelete = async () => {
+  submitting.value = true;
+  try {
+    console.log("🗑️ Deleting personal key:", selectedPassword.value.id);
+    await apiClient.delete(`/personal-keys/${selectedPassword.value.id}`);
+
+    console.log("✅ Personal key deleted");
+    success("Personal key deleted successfully!");
+    await loadPersonalKeys();
+    handleCloseModal();
+  } catch (err) {
+    console.error("❌ Error deleting personal key:", err);
+    showError(err.response?.data?.message || "Failed to delete personal key");
+  } finally {
+    submitting.value = false;
+  }
 };
 
 const goToPage = (page) => {
@@ -302,7 +363,9 @@ const openCreateModal = () => {
                 </p>
               </div>
 
-              <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div
+                class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3"
+              >
                 <!-- Search Bar -->
                 <div class="relative w-full sm:w-64">
                   <Search
@@ -329,8 +392,14 @@ const openCreateModal = () => {
             </div>
           </div>
 
+          <!-- Loading State -->
+          <div v-if="loading" class="flex items-center justify-center py-12">
+            <Loader2 class="h-8 w-8 animate-spin text-gray-400" />
+            <span class="ml-2 text-gray-600">Loading personal keys...</span>
+          </div>
+
           <!-- Table -->
-          <div class="overflow-x-auto">
+          <div v-else class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b bg-gray-50">
@@ -365,7 +434,7 @@ const openCreateModal = () => {
                   <td
                     class="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900"
                   >
-                    {{ pwd.systemName }}
+                    {{ pwd.keyname }}
                   </td>
                   <td
                     class="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
@@ -374,7 +443,7 @@ const openCreateModal = () => {
                   </td>
                   <td class="hidden sm:table-cell px-4 sm:px-6 py-4">
                     <span class="text-sm font-mono text-gray-600">{{
-                      maskPassword(pwd.password)
+                      maskPassword(pwd.key)
                     }}</span>
                   </td>
                   <td class="px-4 sm:px-6 py-4">
@@ -517,7 +586,7 @@ const openCreateModal = () => {
               </p>
               <div class="bg-gray-50 p-3 rounded-md border border-gray-200">
                 <p class="text-sm font-medium text-gray-900">
-                  {{ selectedPassword?.systemName }}
+                  {{ selectedPassword?.keyname }}
                 </p>
               </div>
             </div>
@@ -530,7 +599,8 @@ const openCreateModal = () => {
                 type="password"
                 v-model="accountPassword"
                 @keypress.enter="handleVerifyPassword"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                :disabled="verifyingPassword"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                 placeholder="Enter your account password"
               />
               <p v-if="passwordError" class="mt-2 text-sm text-red-600">
@@ -538,71 +608,68 @@ const openCreateModal = () => {
               </p>
             </div>
 
-            <div class="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-              <p class="text-xs text-blue-800">
-                Demo password:
-                <span class="font-mono font-semibold">demo123</span>
-              </p>
-            </div>
-
             <div class="border-t pt-4 flex gap-3">
               <button
                 @click="handleCloseModal"
-                class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                :disabled="verifyingPassword"
+                class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 @click="handleVerifyPassword"
-                class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800"
+                :disabled="verifyingPassword"
+                class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
-                Verify
+                <Loader2
+                  v-if="verifyingPassword"
+                  class="h-4 w-4 animate-spin"
+                />
+                {{ verifyingPassword ? "Verifying..." : "Verify" }}
               </button>
             </div>
           </template>
 
           <template v-else>
-            <div class="space-y-4 mb-6">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >System Name</label
-                >
-                <p class="text-sm text-gray-900 font-medium">
-                  {{ revealedPassword.systemName }}
-                </p>
-              </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Key Name
+              </label>
+              <p class="text-sm text-gray-900 font-medium">
+                {{ revealedPassword.keyname }}
+              </p>
+            </div>
 
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Description</label
-                >
-                <p class="text-sm text-gray-600">
-                  {{ revealedPassword.description }}
-                </p>
-              </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <p class="text-sm text-gray-600">
+                {{ revealedPassword.description }}
+              </p>
+            </div>
 
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2"
-                  >Password</label
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Key
+              </label>
+              <div
+                class="flex items-center gap-2 bg-gray-50 p-3 rounded-md border border-gray-200"
+              >
+                <Lock class="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <code class="text-sm font-mono text-gray-900 flex-1">{{
+                  showPassword
+                    ? revealedPassword.key
+                    : maskPassword(revealedPassword.key)
+                }}</code>
+                <button
+                  @click="togglePasswordVisibility"
+                  class="text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
+                  type="button"
                 >
-                <div
-                  class="flex items-center gap-2 bg-gray-50 p-3 rounded-md border border-gray-200"
-                >
-                  <Lock class="h-4 w-4 text-gray-400 flex-shrink-0" />
-                  <code class="text-sm font-mono text-gray-900 flex-1">{{
-                    showPassword
-                      ? revealedPassword.password
-                      : maskPassword(revealedPassword.password)
-                  }}</code>
-                  <button
-                    @click="togglePasswordVisibility"
-                    class="text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
-                    type="button"
-                  >
-                    <EyeOff v-if="showPassword" class="h-4 w-4" />
-                    <Eye v-else class="h-4 w-4" />
-                  </button>
-                </div>
+                  <EyeOff v-if="showPassword" class="h-4 w-4" />
+                  <Eye v-else class="h-4 w-4" />
+                </button>
               </div>
             </div>
 
@@ -639,22 +706,19 @@ const openCreateModal = () => {
 
         <div class="px-6 py-4">
           <div class="space-y-4">
-            <!-- System Name -->
+            <!-- Key Name -->
             <div>
               <label class="block text-sm font-medium text-gray-900 mb-2">
-                System Name <span class="text-red-600">*</span>
+                Key Name <span class="text-red-600">*</span>
               </label>
               <input
                 type="text"
-                v-model="formData.systemName"
+                v-model="formData.keyname"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                 placeholder="e.g., GitHub Account"
               />
-              <p
-                v-if="formErrors.systemName"
-                class="mt-1 text-xs text-red-600"
-              >
-                {{ formErrors.systemName }}
+              <p v-if="formErrors.keyname" class="mt-1 text-xs text-red-600">
+                {{ formErrors.keyname }}
               </p>
             </div>
 
@@ -677,19 +741,19 @@ const openCreateModal = () => {
               </p>
             </div>
 
-            <!-- Password -->
+            <!-- Key -->
             <div>
               <label class="block text-sm font-medium text-gray-900 mb-2">
-                Password <span class="text-red-600">*</span>
+                Key <span class="text-red-600">*</span>
               </label>
               <input
                 type="password"
-                v-model="formData.password"
+                v-model="formData.key"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                placeholder="Enter password"
+                placeholder="Enter key"
               />
-              <p v-if="formErrors.password" class="mt-1 text-xs text-red-600">
-                {{ formErrors.password }}
+              <p v-if="formErrors.key" class="mt-1 text-xs text-red-600">
+                {{ formErrors.key }}
               </p>
             </div>
           </div>
@@ -697,15 +761,28 @@ const openCreateModal = () => {
           <div class="border-t mt-6 pt-4 flex gap-3">
             <button
               @click="handleCloseModal"
-              class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              :disabled="submitting"
+              class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
-              @click="showEditModal ? handleUpdatePassword() : handleCreatePassword()"
-              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800"
+              @click="
+                showEditModal ? handleUpdatePassword() : handleCreatePassword()
+              "
+              :disabled="submitting"
+              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
-              {{ showEditModal ? "Update" : "Create" }}
+              <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
+              {{
+                submitting
+                  ? showEditModal
+                    ? "Updating..."
+                    : "Creating..."
+                  : showEditModal
+                  ? "Update"
+                  : "Create"
+              }}
             </button>
           </div>
         </div>
@@ -735,7 +812,7 @@ const openCreateModal = () => {
           </p>
           <div class="bg-red-50 border border-red-200 p-3 rounded-md mb-6">
             <p class="text-sm font-medium text-gray-900">
-              {{ selectedPassword?.systemName }}
+              {{ selectedPassword?.keyname }}
             </p>
             <p class="text-xs text-gray-600 mt-1">
               {{ selectedPassword?.description }}
@@ -745,15 +822,18 @@ const openCreateModal = () => {
           <div class="border-t pt-4 flex gap-3">
             <button
               @click="handleCloseModal"
-              class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              :disabled="submitting"
+              class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               @click="handleConfirmDelete"
-              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+              :disabled="submitting"
+              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             >
-              Delete
+              <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
+              {{ submitting ? "Deleting..." : "Delete" }}
             </button>
           </div>
         </div>
