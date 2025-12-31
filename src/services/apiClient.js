@@ -43,18 +43,23 @@ apiClient.interceptors.response.use(
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
-            // Use store to clear authentication data
-            const userStore = useUserStore();
-
-            // Clear authentication data using store
-            userStore.logout();
-
-            // Redirect to login page if not already there
+            // Get the current path
+            const currentPath = window.location.pathname;
             const basePath = import.meta.env.BASE_URL;
-            const loginPath = basePath + 'login';
-            if (!window.location.pathname.endsWith('/login')) {
+
+            // Don't logout/redirect if we're on the login page (trying to login with bad credentials)
+            if (!currentPath.includes('login')) {
+                // Use store to clear authentication data
+                const userStore = useUserStore();
+
+                // Clear authentication data using store
+                userStore.logout();
+
+                // Redirect to login page
+                const loginPath = basePath + 'login';
                 window.location.href = loginPath;
             }
+            // If on login page, just let the error propagate to the component
         }
 
         // Handle 403 Forbidden errors
