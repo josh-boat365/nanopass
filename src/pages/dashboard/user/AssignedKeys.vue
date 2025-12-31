@@ -1,6 +1,6 @@
 <script setup>
 import BaseLayout from "@/layouts/AppLayout.vue";
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import {
   Eye,
   EyeOff,
@@ -12,7 +12,13 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-vue-next";
+import apiClient from "@/services/apiClient";
+import { API_ENDPOINTS } from "@/config/apiConfig";
+import { useToast } from "@/composables/useToast";
+
+const { success, error: showError } = useToast();
 
 const showPasswordModal = ref(false);
 const selectedPassword = ref(null);
@@ -23,146 +29,13 @@ const showPassword = ref(false);
 const searchQuery = ref("");
 const currentPage = ref(1);
 const itemsPerPage = 15;
+const loading = ref(false);
+const verifyingPassword = ref(false);
 
-// Sample assigned keys data
-const assignedKeys = ref([
-  {
-    id: 1,
-    systemName: "Main Production Server",
-    password: "P@ssw0rd123!Secure",
-    duration: 90,
-    daysLeft: 15,
-    status: "warning",
-  },
-  {
-    id: 2,
-    systemName: "Database Primary",
-    password: "DbS3cur3#2024",
-    duration: 60,
-    daysLeft: 45,
-    status: "healthy",
-  },
-  {
-    id: 3,
-    systemName: "Development Environment",
-    password: "DevPass456",
-    duration: 30,
-    daysLeft: 3,
-    status: "critical",
-  },
-  {
-    id: 4,
-    systemName: "Staging Server",
-    password: "St@g1ng!Env2024",
-    duration: 90,
-    daysLeft: 60,
-    status: "healthy",
-  },
-  {
-    id: 5,
-    systemName: "API Gateway",
-    password: "ApiG@t3w@y2024",
-    duration: 60,
-    daysLeft: 30,
-    status: "healthy",
-  },
-  {
-    id: 6,
-    systemName: "Email Server",
-    password: "Em@ilS3rv3r!",
-    duration: 90,
-    daysLeft: 10,
-    status: "warning",
-  },
-  {
-    id: 7,
-    systemName: "Backup Storage",
-    password: "B@ckupStr0ng#",
-    duration: 180,
-    daysLeft: 120,
-    status: "healthy",
-  },
-  {
-    id: 8,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 9,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 10,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 11,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 12,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 13,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 14,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 15,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 16,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-  {
-    id: 16,
-    systemName: "Load Balancer",
-    password: "L0@dB@l@nc3r",
-    duration: 90,
-    daysLeft: 5,
-    status: "critical",
-  },
-]);
+// Assigned keys data from API
+const assignedKeys = ref([]);
+const permissions = ref([]);
+const systems = ref([]);
 
 const statusColors = {
   critical: "text-red-600",
@@ -170,17 +43,111 @@ const statusColors = {
   healthy: "text-green-600",
 };
 
+// ========================================
+// UTILITY FUNCTIONS
+// ========================================
+
+const getSystemName = (systemId) => {
+  const system = systems.value.find((s) => s.id === systemId);
+  return system ? system.system_name : "Unknown System";
+};
+
+const calculateDaysLeft = (expiryDate) => {
+  if (!expiryDate) return 0;
+  const today = new Date();
+  const expiry = new Date(expiryDate);
+  const diffTime = expiry - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(0, diffDays);
+};
+
+const getStatus = (daysLeft) => {
+  if (daysLeft <= 7) return "critical";
+  if (daysLeft <= 30) return "warning";
+  return "healthy";
+};
+
 const maskPassword = (password) => {
   return "•".repeat(12);
 };
 
+// ========================================
+// API FUNCTIONS
+// ========================================
+
+onMounted(async () => {
+  await loadData();
+});
+
+const loadData = async () => {
+  loading.value = true;
+  try {
+    await Promise.allSettled([loadPermissions(), loadSystems()]);
+  } catch (err) {
+    console.error("Error loading data:", err);
+    showError("Failed to load assigned keys");
+  } finally {
+    loading.value = false;
+  }
+};
+
+const loadPermissions = async () => {
+  try {
+    console.log("📥 Loading permissions...");
+    const endpoint = API_ENDPOINTS.PERMISSIONS?.LIST || "/permissions";
+    const response = await apiClient.get(endpoint);
+    permissions.value = response.data.data || response.data || [];
+    console.log("✅ Permissions loaded:", permissions.value.length);
+  } catch (err) {
+    console.error("❌ Error loading permissions:", err);
+    permissions.value = [];
+  }
+};
+
+const loadSystems = async () => {
+  try {
+    console.log("📥 Loading systems...");
+    const response = await apiClient.get(API_ENDPOINTS.SYSTEMS.LIST);
+    systems.value = response.data.data || response.data || [];
+    console.log("✅ Systems loaded:", systems.value.length);
+  } catch (err) {
+    console.error("❌ Error loading systems:", err);
+    systems.value = [];
+  }
+};
+
+// ========================================
+// COMPUTED PROPERTIES
+// ========================================
+
+// Format assigned keys from permissions
+const formattedKeys = computed(() => {
+  return permissions.value.map((perm) => {
+    const daysLeft = calculateDaysLeft(perm.date_time_expiry);
+    return {
+      id: perm.id,
+      system_id: perm.system_id,
+      systemName: getSystemName(perm.system_id),
+      date_time_expiry: perm.date_time_expiry,
+      daysLeft,
+      status: getStatus(daysLeft),
+    };
+  });
+});
+
+// const statusColors = {
+//   critical: "text-red-600",
+//   warning: "text-yellow-600",
+//   healthy: "text-green-600",
+// };
+
 // Computed: Filtered keys based on search
 const filteredKeys = computed(() => {
   if (!searchQuery.value) {
-    return assignedKeys.value;
+    return formattedKeys.value;
   }
   const query = searchQuery.value.toLowerCase();
-  return assignedKeys.value.filter((key) =>
+  return formattedKeys.value.filter((key) =>
     key.systemName.toLowerCase().includes(query)
   );
 });
@@ -200,7 +167,10 @@ const paginatedKeys = computed(() => {
 // Computed: Pagination info
 const paginationInfo = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage + 1;
-  const end = Math.min(currentPage.value * itemsPerPage, filteredKeys.value.length);
+  const end = Math.min(
+    currentPage.value * itemsPerPage,
+    filteredKeys.value.length
+  );
   return `${start}-${end} of ${filteredKeys.value.length}`;
 });
 
@@ -217,13 +187,40 @@ const handleViewPassword = (password) => {
   revealedPassword.value = null;
 };
 
-const handleVerifyPassword = () => {
-  // Simulate password verification (in real app, this would be an API call)
-  if (accountPassword.value === "demo123") {
-    passwordError.value = "";
-    revealedPassword.value = selectedPassword.value;
-  } else {
-    passwordError.value = "Incorrect account password. Please try again.";
+const handleVerifyPassword = async () => {
+  if (!accountPassword.value.trim()) {
+    passwordError.value = "Please enter your password";
+    return;
+  }
+
+  verifyingPassword.value = true;
+  passwordError.value = "";
+
+  try {
+    // Call API to verify password
+    const endpoint =
+      API_ENDPOINTS.AUTH?.VERIFY_PASSWORD || "/verify-password";
+    const response = await apiClient.post(endpoint, {
+      password: accountPassword.value,
+    });
+
+    // Check if password verification was successful (backend returns true/false)
+    if (response.data.success === true || response.data.success === 1) {
+      // Password verified successfully - show the system password details
+      revealedPassword.value = selectedPassword.value;
+      success("Password verified!");
+      // Clear password field for security
+      accountPassword.value = "";
+    } else if (response.data.success === false || response.data.success === 0) {
+      // Password verification failed
+      passwordError.value = "Invalid password. Please try again.";
+    }
+  } catch (err) {
+    console.error("Password verification failed:", err);
+    passwordError.value =
+      err.response?.data?.message || "Invalid password. Please try again.";
+  } finally {
+    verifyingPassword.value = false;
   }
 };
 
@@ -277,19 +274,23 @@ const togglePasswordVisibility = () => {
         <div class="rounded-lg border bg-white shadow-sm overflow-hidden">
           <!-- Header with Search -->
           <div class="border-b bg-gray-50 px-4 sm:px-6 py-4">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div
+              class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+            >
               <div>
                 <h2 class="text-lg font-semibold text-gray-900">
-                  System Passwords
+                  System Access
                 </h2>
                 <p class="text-sm text-gray-600 mt-1">
-                  Total: {{ filteredKeys.length }} keys
+                  Total: {{ filteredKeys.length }} systems
                 </p>
               </div>
-              
+
               <!-- Search Bar -->
               <div class="relative w-full sm:w-64">
-                <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search
+                  class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+                />
                 <input
                   v-model="searchQuery"
                   @input="handleSearch"
@@ -301,8 +302,14 @@ const togglePasswordVisibility = () => {
             </div>
           </div>
 
+          <!-- Loading State -->
+          <div v-if="loading" class="flex items-center justify-center py-12">
+            <Loader2 class="h-8 w-8 animate-spin text-gray-400" />
+            <span class="ml-2 text-gray-600">Loading assigned systems...</span>
+          </div>
+
           <!-- Table -->
-          <div class="overflow-x-auto">
+          <div v-else class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b bg-gray-50">
@@ -312,14 +319,9 @@ const togglePasswordVisibility = () => {
                     System Name
                   </th>
                   <th
-                    class="hidden sm:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    Password
-                  </th>
-                  <th
                     class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
                   >
-                    Duration
+                    Expiry Date
                   </th>
                   <th
                     class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
@@ -344,15 +346,15 @@ const togglePasswordVisibility = () => {
                   >
                     {{ pwd.systemName }}
                   </td>
-                  <td class="hidden sm:table-cell px-4 sm:px-6 py-4">
-                    <span class="text-sm font-mono text-gray-600">{{
-                      maskPassword(pwd.password)
-                    }}</span>
-                  </td>
                   <td
                     class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
                   >
-                    {{ pwd.duration }}d
+                    {{
+                      new Date(pwd.date_time_expiry).toLocaleDateString(
+                        "en-US",
+                        { year: "numeric", month: "short", day: "numeric" }
+                      )
+                    }}
                   </td>
                   <td class="px-4 sm:px-6 py-4">
                     <div class="flex items-center gap-2">
@@ -392,8 +394,11 @@ const togglePasswordVisibility = () => {
                   </td>
                 </tr>
                 <tr v-if="paginatedKeys.length === 0">
-                  <td colspan="5" class="px-4 sm:px-6 py-8 text-center text-sm text-gray-500">
-                    No keys found matching your search.
+                  <td
+                    colspan="4"
+                    class="px-4 sm:px-6 py-8 text-center text-sm text-gray-500"
+                  >
+                    {{ loading ? "Loading..." : "No assigned systems found." }}
                   </td>
                 </tr>
               </tbody>
@@ -401,12 +406,17 @@ const togglePasswordVisibility = () => {
           </div>
 
           <!-- Pagination -->
-          <div v-if="totalPages > 1" class="border-t px-4 sm:px-6 py-4 bg-gray-50">
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div
+            v-if="totalPages > 1"
+            class="border-t px-4 sm:px-6 py-4 bg-gray-50"
+          >
+            <div
+              class="flex flex-col sm:flex-row items-center justify-between gap-4"
+            >
               <div class="text-sm text-gray-600">
                 Showing {{ paginationInfo }}
               </div>
-              
+
               <div class="flex items-center gap-2">
                 <button
                   @click="prevPage"
@@ -415,7 +425,7 @@ const togglePasswordVisibility = () => {
                     'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     currentPage === 1
                       ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
                   ]"
                 >
                   <ChevronLeft class="h-4 w-4" />
@@ -425,19 +435,25 @@ const togglePasswordVisibility = () => {
                 <div class="flex items-center gap-1">
                   <template v-for="page in totalPages" :key="page">
                     <button
-                      v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
+                      v-if="
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      "
                       @click="goToPage(page)"
                       :class="[
                         'px-3 py-2 text-sm font-medium rounded-md transition-colors',
                         page === currentPage
                           ? 'bg-black text-white'
-                          : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                          : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
                       ]"
                     >
                       {{ page }}
                     </button>
                     <span
-                      v-else-if="page === currentPage - 2 || page === currentPage + 2"
+                      v-else-if="
+                        page === currentPage - 2 || page === currentPage + 2
+                      "
                       class="px-2 text-gray-500"
                     >
                       ...
@@ -452,7 +468,7 @@ const togglePasswordVisibility = () => {
                     'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     currentPage === totalPages
                       ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
                   ]"
                 >
                   <span class="hidden sm:inline mr-1">Next</span>
@@ -504,7 +520,8 @@ const togglePasswordVisibility = () => {
                 type="password"
                 v-model="accountPassword"
                 @keypress.enter="handleVerifyPassword"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                :disabled="verifyingPassword"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                 placeholder="Enter your account password"
               />
               <p v-if="passwordError" class="mt-2 text-sm text-red-600">
@@ -512,25 +529,24 @@ const togglePasswordVisibility = () => {
               </p>
             </div>
 
-            <div class="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-              <p class="text-xs text-blue-800">
-                Demo password:
-                <span class="font-mono font-semibold">demo123</span>
-              </p>
-            </div>
-
             <div class="border-t pt-4 flex gap-3">
               <button
                 @click="handleCloseModal"
-                class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                :disabled="verifyingPassword"
+                class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 @click="handleVerifyPassword"
-                class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800"
+                :disabled="verifyingPassword"
+                class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
-                Verify
+                <Loader2
+                  v-if="verifyingPassword"
+                  class="h-4 w-4 animate-spin"
+                />
+                {{ verifyingPassword ? "Verifying..." : "Verify" }}
               </button>
             </div>
           </template>
@@ -555,7 +571,9 @@ const togglePasswordVisibility = () => {
                 >
                   <Lock class="h-4 w-4 text-gray-400 flex-shrink-0" />
                   <code class="text-sm font-mono text-gray-900 flex-1">{{
-                    showPassword ? revealedPassword.password : maskPassword(revealedPassword.password)
+                    showPassword
+                      ? revealedPassword.password
+                      : maskPassword(revealedPassword.password)
                   }}</code>
                   <button
                     @click="togglePasswordVisibility"

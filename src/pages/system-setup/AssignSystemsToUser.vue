@@ -49,6 +49,34 @@ const errorMessage = ref("");
 const systemSearchQuery = ref("");
 
 // ========================================
+// UTILITY FUNCTIONS (Defined early for use in computed properties)
+// ========================================
+
+const getUserName = (userId) => {
+  const user = users.value.find((u) => u.id === userId);
+  return user ? user.username : "Unknown User";
+};
+
+const getSystemName = (systemId) => {
+  const system = systems.value.find((s) => s.id === systemId);
+  return system ? system.system_name : "Unknown System";
+};
+
+const formatExpiryDate = (date) => {
+  if (!date) return "No expiry";
+  return new Date(date).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const isExpired = (date) => {
+  if (!date) return false;
+  return new Date(date) < new Date();
+};
+
+// ========================================
 // COMPUTED PROPERTIES
 // ========================================
 
@@ -67,7 +95,7 @@ const filteredPermissions = computed(() => {
 
 // Pagination computed properties
 const totalPages = computed(() => {
-  return Math.ceil(filteredPermissions.value.length / itemsPerPage.value);
+  return Math.ceil(groupedPermissions.value.length / itemsPerPage.value);
 });
 
 const paginatedPermissions = computed(() => {
@@ -80,9 +108,9 @@ const paginationInfo = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value + 1;
   const end = Math.min(
     currentPage.value * itemsPerPage.value,
-    filteredPermissions.value.length
+    groupedPermissions.value.length
   );
-  const total = filteredPermissions.value.length;
+  const total = groupedPermissions.value.length;
   return `${start}-${end} of ${total}`;
 });
 
@@ -106,56 +134,145 @@ const selectedSystems = computed(() => {
   );
 });
 
+// Group permissions by user
+const groupedPermissions = computed(() => {
+  const grouped = {};
+
+  filteredPermissions.value.forEach((perm) => {
+    const userId = perm.user_id;
+    if (!grouped[userId]) {
+      grouped[userId] = {
+        user_id: perm.user_id,
+        user_name: getUserName(perm.user_id),
+        systems: [],
+      };
+    }
+    grouped[userId].systems.push({
+      id: perm.id,
+      system_id: perm.system_id,
+      system_name: getSystemName(perm.system_id),
+      date_time_expiry: perm.date_time_expiry,
+    });
+  });
+
+  return Object.values(grouped);
+});
+
+// Paginated grouped permissions
+const paginatedGroupedPermissions = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value;
+  const end = start + itemsPerPage.value;
+  return groupedPermissions.value.slice(start, end);
+});
+
 // ========================================
 // API FUNCTIONS
 // ========================================
 
 // Load all required data on mount
 onMounted(async () => {
-  await loadAllData();
+  try {
+    await loadAllData();
+  } catch (err) {
+    console.error("Fatal error in onMounted:", err);
+    showError("Failed to load page. Please try again.");
+  }
 });
 
 const loadAllData = async () => {
+  loading.value = true;
+  console.log("🚀 Starting to load all data...");
+
   try {
-    loading.value = true;
-    await Promise.all([loadUsers(), loadSystems(), loadPermissions()]);
+    // Use Promise.allSettled to load all data in parallel
+    const results = await Promise.allSettled([
+      loadUsers(),
+      loadSystems(),
+      loadPermissions(),
+    ]);
+
+    console.log(
+      "📊 Data load results:",
+      results.map((r) => r.status)
+    );
+
+    // Handle results
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        const dataType = ["users", "systems", "permissions"][index];
+        console.error(`Failed to load ${dataType}:`, result.reason);
+      }
+    });
   } catch (err) {
-    console.error("Error loading data:", err);
-    showError("Failed to load data. Please try again.");
+    console.error("Error in loadAllData:", err);
   } finally {
     loading.value = false;
+    console.log("✅ Loading completed, loading state set to false");
   }
 };
 
 const loadUsers = async () => {
   try {
+    console.log("📥 Loading users from:", API_ENDPOINTS.USERS.LIST);
     const response = await apiClient.get(API_ENDPOINTS.USERS.LIST);
-    users.value = response.data.data || response.data || [];
+    const data = response.data.data || response.data || [];
+    users.value = Array.isArray(data) ? data : [];
+    console.log("✅ Users loaded:", users.value.length, "users");
+    return users.value;
   } catch (err) {
-    console.error("Error loading users:", err);
+    console.error("❌ Error loading users:", {
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+      error: err.toString(),
+    });
+    users.value = [];
     throw err;
   }
 };
 
 const loadSystems = async () => {
   try {
+    console.log("📥 Loading systems from:", API_ENDPOINTS.SYSTEMS.LIST);
     const response = await apiClient.get(API_ENDPOINTS.SYSTEMS.LIST);
-    systems.value = response.data.data || response.data || [];
+    const data = response.data.data || response.data || [];
+    systems.value = Array.isArray(data) ? data : [];
+    console.log("✅ Systems loaded:", systems.value.length, "systems");
+    return systems.value;
   } catch (err) {
-    console.error("Error loading systems:", err);
+    console.error("❌ Error loading systems:", {
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+      error: err.toString(),
+    });
+    systems.value = [];
     throw err;
   }
 };
 
 const loadPermissions = async () => {
   try {
-    // Assuming you have this endpoint, adjust if needed
-    const response = await apiClient.get("/permissions");
-    permissions.value = response.data.data || response.data || [];
+    const endpoint = API_ENDPOINTS.PERMISSIONS?.LIST || "/permissions";
+    console.log("📥 Loading permissions from:", endpoint);
+    const response = await apiClient.get(endpoint);
+    const data = response.data.data || response.data || [];
+    permissions.value = Array.isArray(data) ? data : [];
+    console.log(
+      "✅ Permissions loaded:",
+      permissions.value.length,
+      "permissions"
+    );
+    return permissions.value;
   } catch (err) {
-    console.error("Error loading permissions:", err);
-    // Don't throw - permissions might be empty initially
+    console.error("❌ Error loading permissions:", {
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+      error: err.toString(),
+    });
     permissions.value = [];
+    throw err;
   }
 };
 
@@ -324,23 +441,47 @@ const updatePermission = async () => {
     return;
   }
 
+  if (!formData.value.system_ids.length) {
+    errorMessage.value = "Please select at least one system";
+    return;
+  }
+
   if (!selectedPermission.value) return;
 
   try {
     submitting.value = true;
     errorMessage.value = "";
 
-    const permissionData = {
-      user_id: formData.value.user_id,
-      system_id: formData.value.system_ids[0],
-      date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
-    };
+    // Update all systems for this user with new expiry date
+    if (
+      selectedPermission.value.systems &&
+      Array.isArray(selectedPermission.value.systems)
+    ) {
+      const updatePromises = selectedPermission.value.systems.map((system) =>
+        apiClient.put(`/permissions/${system.id}`, {
+          user_id: selectedPermission.value.user_id,
+          system_id: system.system_id,
+          date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
+        })
+      );
 
-    await apiClient.put(
-      `/permissions/${selectedPermission.value.id}`,
-      permissionData
-    );
-    success("Permission updated successfully!");
+      await Promise.all(updatePromises);
+      success("Permissions updated successfully!");
+    } else {
+      // Fallback for single update
+      const permissionData = {
+        user_id: formData.value.user_id,
+        system_id: formData.value.system_ids[0],
+        date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
+      };
+
+      await apiClient.put(
+        `/permissions/${selectedPermission.value.id}`,
+        permissionData
+      );
+      success("Permission updated successfully!");
+    }
+
     await loadPermissions();
 
     setTimeout(() => {
@@ -361,8 +502,28 @@ const deletePermission = async () => {
 
   try {
     submitting.value = true;
-    await apiClient.delete(`/permissions/${selectedPermission.value.id}`);
-    success("Permission deleted successfully!");
+
+    // If deleting grouped systems, delete all permissions for this user
+    if (
+      selectedPermission.value.systems &&
+      Array.isArray(selectedPermission.value.systems)
+    ) {
+      // Delete all permissions in the group
+      const deletePromises = selectedPermission.value.systems.map((system) =>
+        apiClient.delete(`/permissions/${system.id}`).catch((err) => {
+          console.error(`Error deleting system ${system.system_name}:`, err);
+          return Promise.reject(err);
+        })
+      );
+
+      await Promise.all(deletePromises);
+      success("All permissions deleted successfully!");
+    } else {
+      // Single permission delete (fallback)
+      await apiClient.delete(`/permissions/${selectedPermission.value.id}`);
+      success("Permission deleted successfully!");
+    }
+
     await loadPermissions();
 
     setTimeout(() => {
@@ -377,32 +538,8 @@ const deletePermission = async () => {
 };
 
 // ========================================
-// UTILITY FUNCTIONS
+// PAGINATION & EVENT HANDLERS
 // ========================================
-
-const getUserName = (userId) => {
-  const user = users.value.find((u) => u.id === userId);
-  return user ? user.username : "Unknown User";
-};
-
-const getSystemName = (systemId) => {
-  const system = systems.value.find((s) => s.id === systemId);
-  return system ? system.system_name : "Unknown System";
-};
-
-const formatExpiryDate = (date) => {
-  if (!date) return "No expiry";
-  return new Date(date).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
-
-const isExpired = (date) => {
-  if (!date) return false;
-  return new Date(date) < new Date();
-};
 
 // Pagination methods
 const handleSearch = () => {
@@ -518,41 +655,62 @@ const nextPage = () => {
             </thead>
             <tbody class="divide-y">
               <tr
-                v-for="permission in paginatedPermissions"
-                :key="permission.id"
+                v-for="group in paginatedGroupedPermissions"
+                :key="group.user_id"
                 class="hover:bg-gray-50 transition-colors"
               >
                 <td class="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900">
-                  <div class="flex flex-col">
-                    <span>{{ getUserName(permission.user_id) }}</span>
-                    <span class="text-xs text-gray-500 sm:hidden">{{
-                      getSystemName(permission.system_id)
-                    }}</span>
-                  </div>
+                  {{ group.user_name }}
                 </td>
                 <td
                   class="hidden sm:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
                 >
-                  {{ getSystemName(permission.system_id) }}
+                  <div class="flex flex-wrap gap-2">
+                    <span
+                      v-for="system in group.systems"
+                      :key="system.id"
+                      class="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                    >
+                      {{ system.system_name }}
+                    </span>
+                  </div>
                 </td>
                 <td class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm">
-                  <div class="flex items-center gap-2">
+                  <div
+                    v-if="group.systems.length > 0"
+                    class="flex items-center gap-2"
+                  >
                     <Calendar class="h-4 w-4 text-gray-400" />
-                    {{ formatExpiryDate(permission.date_time_expiry) }}
+                    <!-- Show the earliest expiry date among all systems -->
+                    {{
+                      formatExpiryDate(
+                        group.systems.reduce((earliest, sys) => {
+                          const earliestDate = new Date(earliest);
+                          const sysDate = new Date(sys.date_time_expiry);
+                          return sysDate < earliestDate
+                            ? sys.date_time_expiry
+                            : earliest;
+                        }, group.systems[0]?.date_time_expiry || "")
+                      )
+                    }}
                   </div>
                 </td>
                 <td class="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm">
                   <span
                     :class="[
                       'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                      isExpired(permission.date_time_expiry)
+                      group.systems.every((sys) =>
+                        isExpired(sys.date_time_expiry)
+                      )
                         ? 'bg-red-100 text-red-800'
                         : 'bg-green-100 text-green-800',
                     ]"
                   >
                     {{
-                      isExpired(permission.date_time_expiry)
-                        ? "Expired"
+                      group.systems.every((sys) =>
+                        isExpired(sys.date_time_expiry)
+                      )
+                        ? "All Expired"
                         : "Active"
                     }}
                   </span>
@@ -560,14 +718,32 @@ const nextPage = () => {
                 <td class="px-4 sm:px-6 py-4 text-right">
                   <div class="flex items-center justify-end gap-1 sm:gap-2">
                     <button
-                      @click="openEditModal(permission)"
+                      @click="
+                        () => {
+                          selectedPermission = {
+                            user_id: group.user_id,
+                            system_ids: group.systems.map((s) => s.system_id),
+                          };
+                          formData.system_ids = group.systems.map(
+                            (s) => s.system_id
+                          );
+                          formData.date_time_expiry =
+                            group.systems[0].date_time_expiry;
+                          showEditModal = true;
+                        }
+                      "
                       class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                     >
                       <Edit2 class="h-4 w-4" />
                       <span class="hidden sm:inline">Edit</span>
                     </button>
                     <button
-                      @click="openDeleteModal(permission)"
+                      @click="
+                        () => {
+                          selectedPermission = group;
+                          showDeleteModal = true;
+                        }
+                      "
                       class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
                     >
                       <Trash2 class="h-4 w-4" />
@@ -900,16 +1076,76 @@ const nextPage = () => {
             </div>
           </div>
 
-          <!-- System (Read-only) -->
+          <!-- System Selection with Search -->
           <div>
-            <label class="block text-sm font-medium text-gray-900 mb-1">
-              System
+            <label class="block text-sm font-medium text-gray-900 mb-2">
+              Select Systems * ({{ formData.system_ids.length }} selected)
             </label>
+
+            <!-- Selected Systems Pills -->
             <div
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50 text-gray-700"
+              v-if="selectedSystems.length > 0"
+              class="flex flex-wrap gap-2 mb-3"
             >
-              {{ getSystemName(selectedPermission?.system_id) }}
+              <div
+                v-for="system in selectedSystems"
+                :key="system.id"
+                class="inline-flex items-center gap-1 px-3 py-1.5 bg-black text-white text-xs rounded-full"
+              >
+                <span>{{ system.system_name }}</span>
+                <button
+                  type="button"
+                  @click="removeSystem(system.id)"
+                  class="hover:bg-gray-800 rounded-full p-0.5 transition-colors"
+                >
+                  <X class="h-3 w-3" />
+                </button>
+              </div>
             </div>
+
+            <!-- System Search Input -->
+            <div class="mb-2">
+              <input
+                v-model="systemSearchQuery"
+                type="text"
+                placeholder="Search systems by name..."
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+
+            <!-- System Checkboxes -->
+            <div
+              class="border border-gray-300 rounded-md max-h-64 overflow-y-auto"
+            >
+              <div
+                v-for="system in filteredSystems"
+                :key="system.id"
+                class="border-b last:border-b-0 hover:bg-gray-50 transition-colors"
+              >
+                <label class="flex items-start gap-3 px-4 py-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    :checked="isSystemSelected(system.id)"
+                    @change="toggleSystemSelection(system.id)"
+                    class="mt-1 h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                  />
+                  <div class="flex-1">
+                    <div class="text-sm font-medium text-gray-900">
+                      {{ system.system_name }}
+                    </div>
+                    <p v-if="system.code" class="text-xs text-gray-500 mt-0.5">
+                      {{ system.code }}
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Results Counter -->
+            <p class="mt-2 text-xs text-gray-500">
+              Showing {{ filteredSystems.length }} of {{ systems.length }}
+              systems
+            </p>
           </div>
 
           <!-- Expiry Date -->
@@ -970,16 +1206,31 @@ const nextPage = () => {
         <!-- Modal Body -->
         <div class="px-4 sm:px-6 py-4">
           <p class="text-sm text-gray-600">
-            Are you sure you want to delete this permission? This action cannot
-            be undone.
+            Are you sure you want to delete all system permissions for this
+            user? This action cannot be undone.
           </p>
           <p
             v-if="selectedPermission"
-            class="mt-3 text-sm font-medium text-gray-900"
+            class="mt-4 text-sm font-medium text-gray-900"
           >
-            {{ getUserName(selectedPermission.user_id) }} →
-            {{ getSystemName(selectedPermission.system_id) }}
+            User:
+            {{
+              selectedPermission.user_name ||
+              getUserName(selectedPermission.user_id)
+            }}
           </p>
+          <div
+            v-if="selectedPermission && selectedPermission.systems"
+            class="mt-3 flex flex-wrap gap-2"
+          >
+            <span
+              v-for="system in selectedPermission.systems"
+              :key="system.id"
+              class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-xs rounded-full"
+            >
+              {{ system.system_name }}
+            </span>
+          </div>
         </div>
 
         <!-- Modal Footer -->

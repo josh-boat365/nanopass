@@ -46,49 +46,56 @@ const routes = [{
   path: "/user/dashboard",
   component: UserDashboard,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['user', 'admin']
   }
 },
 {
   path: "/user/dashboard2",
   component: UserDashboard2,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['user', 'admin']
   }
 },
 {
   path: "/user/assigned-keys",
   component: UserAssignedKeys,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['user', 'admin']
   }
 },
 {
   path: "/user/personal-keys",
   component: UserPersonalKeys,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['user', 'admin']
   }
 },
 {
   path: "/dashboard/settings",
   component: Settings,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['user', 'admin']
   }
 },
 {
   path: "/admin/dashboard",
   component: Dashboard,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 {
   path: "/admin/dashboard/auth-trails",
   component: AuthTrails,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 
@@ -96,49 +103,56 @@ const routes = [{
   path: "/admin/dashboard/create-user",
   component: CreateUser,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 {
   path: "/admin/dashboard/assign-keys-to-users",
   component: AssignKeysToUsers,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 {
   path: "/admin/dashboard/create-system-passwords-policy",
   component: CreateSystemPasswordPolicy,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 {
   path: "/admin/dashboard/create-system-category",
   component: CreateSystemCategory,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 {
   path: "/admin/dashboard/create-system",
   component: CreateSystem,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 {
   path: "/admin/dashboard/create-passwords-for-systems",
   component: CreateSystemPassword,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 {
   path: "/admin/dashboard/assign-systems-to-users",
   component: AssignSystemsToUser,
   meta: {
-    requiresAuth: true
+    requiresAuth: true,
+    role: ['admin']
   }
 },
 ]
@@ -150,14 +164,28 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore();
   const isAuthenticated = userStore.isAuthenticated;
+  const isAdmin = userStore.isAdmin;
 
+  // Check authentication requirement
   if (to.meta.requiresAuth && !isAuthenticated) {
     next("/login");
-  } else if (to.meta.requiresGuest && isAuthenticated) {
-    next("/user/dashboard");
-  } else {
-    next();
+    return;
   }
+
+  // Check role-based access
+  if (to.meta.role && !to.meta.role.includes(isAdmin ? 'admin' : 'user')) {
+    // Redirect unauthorized users to their dashboard
+    next(isAdmin ? "/admin/dashboard" : "/user/dashboard");
+    return;
+  }
+
+  // Redirect authenticated users from guest pages
+  if (to.meta.requiresGuest && isAuthenticated) {
+    next(isAdmin ? "/admin/dashboard" : "/user/dashboard");
+    return;
+  }
+
+  next();
 });
 
 export default router;
