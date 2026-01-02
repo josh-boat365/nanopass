@@ -47,8 +47,11 @@ apiClient.interceptors.response.use(
             const currentPath = window.location.pathname;
             const basePath = import.meta.env.BASE_URL;
 
-            // Don't logout/redirect if we're on the login page (trying to login with bad credentials)
-            if (!currentPath.includes('login')) {
+            // Don't logout/redirect if we're on the login page or calling verify-password endpoint
+            const isLoginPage = currentPath.includes('login');
+            const isVerifyPasswordEndpoint = error.config?.url?.includes('verify-password');
+
+            if (!isLoginPage && !isVerifyPasswordEndpoint) {
                 // Use store to clear authentication data
                 const userStore = useUserStore();
 
@@ -59,7 +62,7 @@ apiClient.interceptors.response.use(
                 const loginPath = basePath + 'login';
                 window.location.href = loginPath;
             }
-            // If on login page, just let the error propagate to the component
+            // If on login page or verify-password endpoint, just let the error propagate to the component
         }
 
         // Handle 403 Forbidden errors
