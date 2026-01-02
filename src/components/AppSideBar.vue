@@ -44,13 +44,13 @@ const allNavMain = [
       {
         title: "My Dashboard",
         url: "/user/dashboard",
-        roles: ["user", "admin"],
+        roles: ["user"],
       },
-    //   {
-    //     title: "My Dashboard2",
-    //     url: "/user/dashboard2",
-    //     roles: ["user", "admin"],
-    //   },
+      //   {
+      //     title: "My Dashboard2",
+      //     url: "/user/dashboard2",
+      //     roles: ["user", "admin"],
+      //   },
       {
         title: "Assigned Keys",
         url: "/user/assigned-keys",
