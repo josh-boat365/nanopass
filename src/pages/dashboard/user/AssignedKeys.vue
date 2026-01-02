@@ -1,6 +1,7 @@
 <script setup>
 import BaseLayout from "@/layouts/AppLayout.vue";
 import { ref, computed, onMounted } from "vue";
+import { useUserStore } from "@/stores/useUserStore";
 import {
   Eye,
   EyeOff,
@@ -13,12 +14,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Download,
 } from "lucide-vue-next";
 import apiClient from "@/services/apiClient";
 import { API_ENDPOINTS } from "@/config/apiConfig";
 import { useToast } from "@/composables/useToast";
+import * as XLSX from "xlsx";
 
 const { success, error: showError } = useToast();
+const userStore = useUserStore();
 
 const showPasswordModal = ref(false);
 const selectedPassword = ref(null);
@@ -70,6 +74,73 @@ const getStatus = (daysLeft) => {
 
 const maskPassword = (password) => {
   return "•".repeat(12);
+};
+
+// ========================================
+// EXPORT FUNCTIONS
+// ========================================
+
+const exportToExcel = (exportFiltered = false) => {
+  try {
+    // Determine which data to export
+    const dataToExport = exportFiltered
+      ? filteredKeys.value
+      : formattedKeys.value;
+
+    if (dataToExport.length === 0) {
+      showError("No data to export");
+      return;
+    }
+
+    // Prepare export data
+    const exportData = dataToExport.map((key) => {
+      const row = {
+        "System Name": key.systemName,
+        "Expiry Date": new Date(key.date_time_expiry).toLocaleDateString(
+          "en-US",
+          { year: "numeric", month: "short", day: "numeric" }
+        ),
+        "Days Left": key.daysLeft,
+        Status: key.status.charAt(0).toUpperCase() + key.status.slice(1),
+      };
+
+      // Add username and email for admins
+      if (userStore.isAdmin) {
+        row["Username"] = key.username;
+        row["Email"] = key.email;
+      }
+
+      return row;
+    });
+
+    // Create workbook and worksheet
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Assigned Keys");
+
+    // Set column widths
+    const colWidths = [
+      { wch: 25 }, // System Name
+      ...(userStore.isAdmin ? [{ wch: 20 }, { wch: 25 }] : []), // Username, Email
+      { wch: 15 }, // Expiry Date
+      { wch: 12 }, // Days Left
+      { wch: 12 }, // Status
+    ];
+    worksheet["!cols"] = colWidths;
+
+    // Generate filename
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = exportFiltered
+      ? `assigned-keys-filtered-${timestamp}.xlsx`
+      : `assigned-keys-${timestamp}.xlsx`;
+
+    // Write file
+    XLSX.writeFile(workbook, filename);
+    success(`Exported ${dataToExport.length} records to ${filename}`);
+  } catch (err) {
+    console.error("Error exporting to Excel:", err);
+    showError("Failed to export data");
+  }
 };
 
 // ========================================
@@ -129,6 +200,8 @@ const formattedKeys = computed(() => {
       id: perm.id,
       system_id: perm.system_id,
       systemName: getSystemName(perm.system_id),
+      username: perm.user?.username || perm.username || "N/A",
+      email: perm.user?.email || perm.email || "N/A",
       date_time_expiry: perm.date_time_expiry,
       daysLeft,
       status: getStatus(daysLeft),
@@ -148,9 +221,14 @@ const filteredKeys = computed(() => {
     return formattedKeys.value;
   }
   const query = searchQuery.value.toLowerCase();
-  return formattedKeys.value.filter((key) =>
-    key.systemName.toLowerCase().includes(query)
-  );
+  return formattedKeys.value.filter((key) => {
+    const matchesSystem = key.systemName.toLowerCase().includes(query);
+    const matchesUser =
+      userStore.isAdmin &&
+      (key.username.toLowerCase().includes(query) ||
+        key.email.toLowerCase().includes(query));
+    return matchesSystem || matchesUser;
+  });
 });
 
 // Computed: Total pages
@@ -252,7 +330,8 @@ const handleVerifyPassword = async () => {
           ...selectedPassword.value,
           title: passwordData.password.title || "Unknown",
           username: passwordData.password.username || "Unknown",
-          password: passwordData.password.password || "Unable to retrieve password",
+          password:
+            passwordData.password.password || "Unable to retrieve password",
           notes: passwordData.password.notes || "N/A",
           is_active:
             passwordData.is_active !== undefined
@@ -328,7 +407,11 @@ const toggleUsernameVisibility = () => {
           Assigned Keys
         </h1>
         <p class="mt-2 text-sm sm:text-base text-gray-600">
-          View and manage system passwords assigned to you
+          {{
+            userStore.isAdmin
+              ? "View and manage system access by users"
+              : "View and manage system passwords assigned to you"
+          }}
         </p>
       </div>
 
@@ -349,18 +432,47 @@ const toggleUsernameVisibility = () => {
                 </p>
               </div>
 
-              <!-- Search Bar -->
-              <div class="relative w-full sm:w-64">
-                <Search
-                  class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
-                />
-                <input
-                  v-model="searchQuery"
-                  @input="handleSearch"
-                  type="text"
-                  placeholder="Search by system name..."
-                  class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                />
+              <!-- Search Bar and Export Buttons -->
+              <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <!-- Search Bar -->
+                <div class="relative w-full sm:w-64">
+                  <Search
+                    class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+                  />
+                  <input
+                    v-model="searchQuery"
+                    @input="handleSearch"
+                    type="text"
+                    :placeholder="
+                      userStore.isAdmin
+                        ? 'Search by system, username or email...'
+                        : 'Search by system name...'
+                    "
+                    class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                  />
+                </div>
+
+                <!-- Export Buttons -->
+                <div class="flex gap-2">
+                  <button
+                    @click="exportToExcel(true)"
+                    :disabled="filteredKeys.length === 0"
+                    title="Export filtered data to Excel"
+                    class="inline-flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Download class="h-4 w-4" />
+                    <span class="hidden sm:inline">Filtered</span>
+                  </button>
+                  <button
+                    @click="exportToExcel(false)"
+                    :disabled="formattedKeys.length === 0"
+                    title="Export all data to Excel"
+                    class="inline-flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Download class="h-4 w-4" />
+                    <span class="hidden sm:inline">Export All</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -380,6 +492,18 @@ const toggleUsernameVisibility = () => {
                     class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
                   >
                     System Name
+                  </th>
+                  <th
+                    v-if="userStore.isAdmin"
+                    class="hidden sm:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
+                  >
+                    Username
+                  </th>
+                  <th
+                    v-if="userStore.isAdmin"
+                    class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
+                  >
+                    Email
                   </th>
                   <th
                     class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
@@ -408,6 +532,18 @@ const toggleUsernameVisibility = () => {
                     class="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900"
                   >
                     {{ pwd.systemName }}
+                  </td>
+                  <td
+                    v-if="userStore.isAdmin"
+                    class="hidden sm:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
+                  >
+                    {{ pwd.username }}
+                  </td>
+                  <td
+                    v-if="userStore.isAdmin"
+                    class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
+                  >
+                    {{ pwd.email }}
                   </td>
                   <td
                     class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
@@ -680,6 +816,10 @@ const toggleUsernameVisibility = () => {
                           </span>
                         </div>
                       </div>
+                      <p class="text-xs text-amber-600 mt-2">
+                        ⚠️ This is your plain text key. Keep it secure and do
+                        not share it.
+                      </p>
                     </template>
                     <template v-else>
                       <code class="text-sm font-mono text-gray-900"
