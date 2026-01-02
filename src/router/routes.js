@@ -20,6 +20,8 @@ import CreateSystem from "@/pages/system-setup/CreateSystem.vue";
 import CreateSystemPassword from "../pages/system-setup/CreateSystemPassword.vue";
 import AssignKeysToUsers from "../pages/users/AssignKeysToUser.vue";
 import AssignSystemsToUser from "../pages/system-setup/AssignSystemsToUser.vue";
+import NotFound from "@/pages/errors/NotFound.vue";
+import ServerError from "@/pages/errors/ServerError.vue";
 
 const routes = [{
   path: "/",
@@ -155,6 +157,27 @@ const routes = [{
     role: ['admin']
   }
 },
+{
+  path: "/error/404",
+  component: NotFound,
+  meta: {
+    title: "Page Not Found"
+  }
+},
+{
+  path: "/error/500",
+  component: ServerError,
+  meta: {
+    title: "Server Error"
+  }
+},
+{
+  path: "/:pathMatch(.*)*",
+  component: NotFound,
+  meta: {
+    title: "Page Not Found"
+  }
+}
 ]
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
