@@ -1,50 +1,53 @@
 <template>
   <div
-    class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800 px-4"
+    class="min-h-screen bg-white flex flex-col items-center justify-center px-4"
   >
-    <div class="text-center">
-      <!-- Error Code -->
-      <div class="mb-8">
-        <h1
-          class="text-9xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-red-500"
-        >
-          500
-        </h1>
-      </div>
+    <!-- Logo -->
+    <div class="mb-12 flex items-center justify-center gap-3">
+      <img
+        src="@/assets/icons/codesandbox.svg"
+        alt="Nanopass"
+        class="h-16 w-16"
+      />
+      <h1 class="text-4xl sm:text-5xl font-bold text-black">NanoPass</h1>
+    </div>
+
+    <!-- Main Content -->
+    <div class="w-full max-w-2xl text-center">
+      <!-- Error Code in black (no gradient) -->
+      <h1 class="text-9xl sm:text-10xl font-bold text-black mb-6">500</h1>
 
       <!-- Error Title -->
-      <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">
+      <h2 class="text-3xl sm:text-4xl font-bold text-black mb-4">
         Server Error
       </h2>
 
       <!-- Error Description -->
-      <p class="text-gray-400 text-lg mb-8 max-w-md mx-auto">
-        Something went wrong on our end. Please try again later or contact
-        support if the problem persists.
+      <p class="text-gray-700 text-lg mb-8 max-w-lg mx-auto">
+        Something went wrong on our end. Our team has been notified of the
+        issue. Please try again later or return to the home page.
       </p>
 
       <!-- Action Buttons -->
-      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+      <div class="flex flex-col sm:flex-row gap-4 justify-center mb-8">
         <router-link
           to="/"
-          class="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg"
+          class="px-8 py-3 bg-black text-white font-semibold rounded-lg hover:bg-gray-900 transition-all duration-300"
         >
-          Go Home
+          Go to Home
         </router-link>
         <button
           @click="goBack"
-          class="px-8 py-3 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-all duration-300 shadow-lg"
+          class="px-8 py-3 bg-gray-200 text-black font-semibold rounded-lg hover:bg-gray-300 transition-all duration-300"
         >
           Go Back
         </button>
       </div>
 
-      <!-- Additional Info -->
-      <div class="mt-16 pt-8 border-t border-gray-700">
-        <p class="text-gray-500 text-sm">
-          Error Code:
-          <span class="font-mono text-gray-400">500_SERVER_ERROR</span>
-        </p>
+      <!-- Error Code Display -->
+      <div class="mt-8 pt-8 border-t border-gray-300">
+        <p class="text-gray-600 text-sm mb-2">Error Code</p>
+        <code class="text-black text-sm font-mono">500_SERVER_ERROR</code>
       </div>
     </div>
   </div>
