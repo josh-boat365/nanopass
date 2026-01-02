@@ -59,9 +59,10 @@ apiClient.interceptors.response.use(
                 // Clear authentication data using store
                 userStore.logout();
 
-                // Redirect to login page
-                const loginPath = basePath + 'login';
-                window.location.href = loginPath;
+                // Redirect to login page using the base URL from Vite config
+                // basePath already includes the trailing slash (e.g., '/nanopass/')
+                const loginUrl = `${basePath}login`;
+                window.location.href = loginUrl;
             }
             // If on login page or verify endpoints, just let the error propagate to the component
         }
