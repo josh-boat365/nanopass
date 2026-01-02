@@ -74,6 +74,21 @@ const API_ENDPOINTS = {
         BY_SYSTEM: (systemId) => `/permissions/system/${systemId}`,
         ACTIVE: '/permissions/active',
     },
+
+    // Audit Trail endpoints
+    AUDIT_TRAILS: {
+        LIST: '/audit-trails',
+        SHOW: (id) => `/audit-trails/${id}`,
+        BY_USER: (userId) => `/audit-trails/user/${userId}`,
+        BY_MODEL: (modelType, modelId) => `/audit-trails/model/${modelType}/${modelId}`,
+        RECENT_ACTIVITY: '/audit-trails/recent-activity',
+        PASSWORD_ACCESS_LOGS: '/audit-trails/password-access-logs',
+        PERMISSION_LOGS: '/audit-trails/permission-logs',
+        PERSONAL_KEY_ACCESS_LOGS: '/audit-trails/personal-key-access-logs',
+        ADMIN_ACTIVITY: '/audit-trails/admin-activity',
+        EXPORT: '/audit-trails/export',
+        STATISTICS: '/audit-trails/statistics',
+    },
 };
 
 const API_CONFIG = {
