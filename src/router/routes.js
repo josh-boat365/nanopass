@@ -18,7 +18,6 @@ import CreateSystemPasswordPolicy from "@/pages/system-setup/CreateSystemPasswor
 import CreateSystemCategory from "@/pages/system-setup/CreateSystemCategory.vue";
 import CreateSystem from "@/pages/system-setup/CreateSystem.vue";
 import CreateSystemPassword from "../pages/system-setup/CreateSystemPassword.vue";
-import AssignKeysToUsers from "../pages/users/AssignKeysToUser.vue";
 import AssignSystemsToUser from "../pages/system-setup/AssignSystemsToUser.vue";
 import NotFound from "@/pages/errors/NotFound.vue";
 import ServerError from "@/pages/errors/ServerError.vue";
@@ -104,14 +103,6 @@ const routes = [{
 {
   path: "/admin/dashboard/create-user",
   component: CreateUser,
-  meta: {
-    requiresAuth: true,
-    role: ['admin']
-  }
-},
-{
-  path: "/admin/dashboard/assign-keys-to-users",
-  component: AssignKeysToUsers,
   meta: {
     requiresAuth: true,
     role: ['admin']
