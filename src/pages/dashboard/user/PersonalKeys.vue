@@ -150,17 +150,19 @@ const handleVerifyPassword = async () => {
     if (response.data.success === true || response.data.success === 1) {
       // Password verified successfully - show the key details
       revealedPassword.value = selectedPassword.value;
-      success("Password verified!");
+      success("Password verified! Displaying key details.");
       // Clear password field for security
       accountPassword.value = "";
     } else if (response.data.success === false || response.data.success === 0) {
       // Password verification failed
-      passwordError.value = "Invalid password. Please try again.";
+      passwordError.value = "Password invalid. Please try again.";
+      revealedPassword.value = null;
     }
   } catch (err) {
     console.error("Password verification failed:", err);
     passwordError.value =
-      err.response?.data?.message || "Invalid password. Please try again.";
+      err.response?.data?.message || "Password invalid. Please try again.";
+    revealedPassword.value = null;
   } finally {
     verifyingPassword.value = false;
   }
@@ -651,26 +653,17 @@ const openCreateModal = () => {
 
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">
-                Key
+                Password
               </label>
               <div
-                class="flex items-center gap-2 bg-gray-50 p-3 rounded-md border border-gray-200"
+                class="flex items-center gap-2 bg-green-50 p-3 rounded-md border border-green-200"
               >
-                <Lock class="h-4 w-4 text-gray-400 flex-shrink-0" />
-                <code class="text-sm font-mono text-gray-900 flex-1">{{
-                  showPassword
-                    ? revealedPassword.key
-                    : maskPassword(revealedPassword.key)
-                }}</code>
-                <button
-                  @click="togglePasswordVisibility"
-                  class="text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
-                  type="button"
-                >
-                  <EyeOff v-if="showPassword" class="h-4 w-4" />
-                  <Eye v-else class="h-4 w-4" />
-                </button>
+                <Lock class="h-4 w-4 text-green-600 flex-shrink-0" />
+                <code class="text-sm font-mono text-gray-900 flex-1 break-all">{{ revealedPassword.key }}</code>
               </div>
+              <p class="text-xs text-amber-600 mt-2">
+                ⚠️ This is your plain text password. Keep it secure and do not share it.
+              </p>
             </div>
 
             <div class="border-t pt-4">

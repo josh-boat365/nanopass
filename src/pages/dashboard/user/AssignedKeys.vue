@@ -198,22 +198,47 @@ const handleVerifyPassword = async () => {
 
   try {
     // Call API to verify password
-    const endpoint =
-      API_ENDPOINTS.AUTH?.VERIFY_PASSWORD || "/verify-password";
+    const endpoint = API_ENDPOINTS.AUTH?.VERIFY_PASSWORD || "/verify-password";
     const response = await apiClient.post(endpoint, {
       password: accountPassword.value,
     });
 
-    // Check if password verification was successful (backend returns true/false)
-    if (response.data.success === true || response.data.success === 1) {
-      // Password verified successfully - show the system password details
-      revealedPassword.value = selectedPassword.value;
-      success("Password verified!");
-      // Clear password field for security
-      accountPassword.value = "";
-    } else if (response.data.success === false || response.data.success === 0) {
+    // Check if password verification was successful
+    if (
+      response.data?.success === true &&
+      response.data?.data?.password_match === true
+    ) {
+      // Password verified successfully
+      console.log(
+        "✅ Password verified for user:",
+        response.data.data.username
+      );
+
+      // Get the actual system password
+      try {
+        const systemId = selectedPassword.value.system_id;
+        const passwordEndpoint = API_ENDPOINTS.SYSTEMS.GET_PASSWORD(systemId);
+        const passwordResponse = await apiClient.get(passwordEndpoint);
+
+        // Merge the system password with selectedPassword
+        revealedPassword.value = {
+          ...selectedPassword.value,
+          password:
+            passwordResponse.data?.data?.password ||
+            "Unable to retrieve password",
+        };
+
+        success("Password verified successfully!");
+        accountPassword.value = "";
+      } catch (pwdErr) {
+        console.error("Error fetching system password:", pwdErr);
+        passwordError.value =
+          "Verified but unable to retrieve system password.";
+      }
+    } else {
       // Password verification failed
-      passwordError.value = "Invalid password. Please try again.";
+      passwordError.value =
+        response.data?.message || "Invalid password. Please try again.";
     }
   } catch (err) {
     console.error("Password verification failed:", err);
