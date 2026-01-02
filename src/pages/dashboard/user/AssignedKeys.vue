@@ -26,6 +26,7 @@ const accountPassword = ref("");
 const passwordError = ref("");
 const revealedPassword = ref(null);
 const showPassword = ref(false);
+const showUsername = ref(false);
 const searchQuery = ref("");
 const currentPage = ref(1);
 const itemsPerPage = 15;
@@ -220,14 +221,46 @@ const handleVerifyPassword = async () => {
         const passwordEndpoint = API_ENDPOINTS.SYSTEMS.GET_PASSWORD(systemId);
         const passwordResponse = await apiClient.get(passwordEndpoint);
 
-        // Merge the system password with selectedPassword
+        // Extract password data - handle if response.data.data is the password object
+        let passwordData = passwordResponse.data?.data || {};
+
+        // If password field contains a JSON string, parse it
+        if (typeof passwordData === "string") {
+          try {
+            passwordData = JSON.parse(passwordData);
+          } catch (e) {
+            console.warn("Could not parse password data as JSON");
+          }
+        }
+
+        // If passwordData.password is a JSON string (the entire object), parse it
+        if (typeof passwordData.password === "string") {
+          try {
+            const parsedPasswordObj = JSON.parse(passwordData.password);
+            // Extract fields from the parsed object
+            passwordData = {
+              ...passwordData,
+              ...parsedPasswordObj,
+            };
+          } catch (e) {
+            console.warn("Could not parse password field as JSON");
+          }
+        }
+
+        // Build the revealed password object with extracted fields
         revealedPassword.value = {
           ...selectedPassword.value,
-          password:
-            passwordResponse.data?.data?.password ||
-            "Unable to retrieve password",
+          title: passwordData.password.title || "Unknown",
+          username: passwordData.password.username || "Unknown",
+          password: passwordData.password.password || "Unable to retrieve password",
+          notes: passwordData.password.notes || "N/A",
+          is_active:
+            passwordData.is_active !== undefined
+              ? passwordData.is_active
+              : true,
         };
 
+        console.log("✅ Password data extracted:", revealedPassword.value);
         success("Password verified successfully!");
         accountPassword.value = "";
       } catch (pwdErr) {
@@ -256,6 +289,7 @@ const handleCloseModal = () => {
   passwordError.value = "";
   revealedPassword.value = null;
   showPassword.value = false;
+  showUsername.value = false;
 };
 
 const goToPage = (page) => {
@@ -278,6 +312,10 @@ const prevPage = () => {
 
 const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value;
+};
+
+const toggleUsernameVisibility = () => {
+  showUsername.value = !showUsername.value;
 };
 </script>
 
@@ -589,20 +627,69 @@ const togglePasswordVisibility = () => {
 
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2"
-                  >Password</label
+                  >Details</label
                 >
                 <div
-                  class="flex items-center gap-2 bg-gray-50 p-3 rounded-md border border-gray-200"
+                  class="flex items-start gap-2 bg-gray-50 p-3 rounded-md border border-gray-200"
                 >
-                  <Lock class="h-4 w-4 text-gray-400 flex-shrink-0" />
-                  <code class="text-sm font-mono text-gray-900 flex-1">{{
-                    showPassword
-                      ? revealedPassword.password
-                      : maskPassword(revealedPassword.password)
-                  }}</code>
+                  <Lock class="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <div class="flex-1">
+                    <template v-if="showPassword">
+                      <div class="space-y-2 text-sm">
+                        <div>
+                          <span class="font-medium text-gray-700">Title:</span>
+                          <span class="text-gray-900 ml-2">{{
+                            revealedPassword.title
+                          }}</span>
+                        </div>
+                        <div>
+                          <span class="font-medium text-gray-700"
+                            >Username:</span
+                          >
+                          <code class="text-gray-900 ml-2 font-mono">{{
+                            revealedPassword.username
+                          }}</code>
+                        </div>
+                        <div>
+                          <span class="font-medium text-gray-700"
+                            >Password:</span
+                          >
+                          <code class="text-gray-900 ml-2 font-mono">{{
+                            revealedPassword.password
+                          }}</code>
+                        </div>
+                        <div>
+                          <span class="font-medium text-gray-700">Notes:</span>
+                          <span class="text-gray-900 ml-2">{{
+                            revealedPassword.notes
+                          }}</span>
+                        </div>
+                        <div>
+                          <span class="font-medium text-gray-700">Status:</span>
+                          <span
+                            :class="[
+                              'ml-2 px-2 py-1 rounded text-xs font-medium',
+                              revealedPassword.is_active
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800',
+                            ]"
+                          >
+                            {{
+                              revealedPassword.is_active ? "Active" : "Inactive"
+                            }}
+                          </span>
+                        </div>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <code class="text-sm font-mono text-gray-900"
+                        >••••••••••••</code
+                      >
+                    </template>
+                  </div>
                   <button
                     @click="togglePasswordVisibility"
-                    class="text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
+                    class="text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0 mt-0.5"
                     type="button"
                   >
                     <EyeOff v-if="showPassword" class="h-4 w-4" />

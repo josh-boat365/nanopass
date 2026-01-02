@@ -139,30 +139,40 @@ const handleVerifyPassword = async () => {
   passwordError.value = "";
 
   try {
-    // Call API to verify password
-    const endpoint =
-      API_ENDPOINTS.AUTH?.VERIFY_PASSWORD || "/verify-password";
+    // Call API to verify personal key with user account password
+    const personalKeyId = selectedPassword.value.id;
+    const endpoint = `/personal-keys/${personalKeyId}/verify`;
     const response = await apiClient.post(endpoint, {
       password: accountPassword.value,
     });
 
-    // Check if password verification was successful (backend returns true/false)
-    if (response.data.success === true || response.data.success === 1) {
-      // Password verified successfully - show the key details
-      revealedPassword.value = selectedPassword.value;
-      success("Password verified! Displaying key details.");
-      // Clear password field for security
+    // Check if password verification was successful
+    if (response.data?.success === true && response.data?.data) {
+      // Password verified successfully - backend returns the personal key data
+      console.log("✅ Personal key verified:", response.data.data.keyname);
+
+      const keyData = response.data.data;
+
+      // Build the revealed password object with extracted fields
+      revealedPassword.value = {
+        ...selectedPassword.value,
+        id: keyData.id,
+        keyname: keyData.keyname || "Unknown",
+        description: keyData.description || "N/A",
+        key: keyData.key || "Unable to retrieve key",
+      };
+
+      success("Password verified successfully!");
       accountPassword.value = "";
-    } else if (response.data.success === false || response.data.success === 0) {
+    } else {
       // Password verification failed
-      passwordError.value = "Password invalid. Please try again.";
-      revealedPassword.value = null;
+      passwordError.value =
+        response.data?.message || "Invalid password. Please try again.";
     }
   } catch (err) {
     console.error("Password verification failed:", err);
     passwordError.value =
-      err.response?.data?.message || "Password invalid. Please try again.";
-    revealedPassword.value = null;
+      err.response?.data?.message || "Invalid password. Please try again.";
   } finally {
     verifyingPassword.value = false;
   }
@@ -633,37 +643,65 @@ const openCreateModal = () => {
           </template>
 
           <template v-else>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Key Name
-              </label>
-              <p class="text-sm text-gray-900 font-medium">
-                {{ revealedPassword.keyname }}
-              </p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <p class="text-sm text-gray-600">
-                {{ revealedPassword.description }}
-              </p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <div
-                class="flex items-center gap-2 bg-green-50 p-3 rounded-md border border-green-200"
-              >
-                <Lock class="h-4 w-4 text-green-600 flex-shrink-0" />
-                <code class="text-sm font-mono text-gray-900 flex-1 break-all">{{ revealedPassword.key }}</code>
+            <div class="space-y-4 mb-6">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Key Name
+                </label>
+                <p class="text-sm text-gray-900 font-medium">
+                  {{ revealedPassword.keyname }}
+                </p>
               </div>
-              <p class="text-xs text-amber-600 mt-2">
-                ⚠️ This is your plain text password. Keep it secure and do not share it.
-              </p>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <p class="text-sm text-gray-600">
+                  {{ revealedPassword.description }}
+                </p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2"
+                  >Details</label
+                >
+                <div
+                  class="flex items-start gap-2 bg-gray-50 p-3 rounded-md border border-gray-200"
+                >
+                  <Lock class="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <div class="flex-1">
+                    <template v-if="showPassword">
+                      <div class="space-y-2 text-sm">
+                        <div>
+                          <span class="font-medium text-gray-700">Key:</span>
+                          <code
+                            class="text-gray-900 ml-2 font-mono break-all"
+                            >{{ revealedPassword.key }}</code
+                          >
+                        </div>
+                      </div>
+                      <p class="text-xs text-amber-600 mt-2">
+                        ⚠️ This is your plain text key. Keep it secure and do
+                        not share it.
+                      </p>
+                    </template>
+                    <template v-else>
+                      <code class="text-sm font-mono text-gray-900"
+                        >••••••••••••</code
+                      >
+                    </template>
+                  </div>
+                  <button
+                    @click="togglePasswordVisibility"
+                    class="text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0 mt-0.5"
+                    type="button"
+                  >
+                    <EyeOff v-if="showPassword" class="h-4 w-4" />
+                    <Eye v-else class="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="border-t pt-4">
