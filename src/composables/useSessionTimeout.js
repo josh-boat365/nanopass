@@ -96,7 +96,9 @@ export const useSessionTimeout = () => {
 
             // Navigate to login with a small delay to ensure state is cleared
             setTimeout(() => {
-                router.push("/login");
+                router.push({
+                    path: "/login"
+                });
             }, 100);
 
         } catch (err) {
