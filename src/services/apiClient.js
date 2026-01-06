@@ -70,21 +70,21 @@ apiClient.interceptors.response.use(
         if (error.response?.status === 403) {
             console.error('Access forbidden:', error.response.data);
             // Redirect to 404 page for forbidden resources
-            window.location.href = `${import.meta.env.BASE_URL}error/404`;
+            // window.location.href = `${import.meta.env.BASE_URL}error/404`;
         }
 
         // Handle 404 Not Found errors
         if (error.response?.status === 404) {
             console.error('Resource not found:', error.response.data);
             // Redirect to 404 error page
-            window.location.href = `${import.meta.env.BASE_URL}error/404`;
+            // window.location.href = `${import.meta.env.BASE_URL}error/404`;
         }
 
         // Handle 500 Server errors
         if (error.response?.status === 500) {
             console.error('Server error:', error.response.data);
             // Redirect to 500 error page
-            window.location.href = `${import.meta.env.BASE_URL}error/500`;
+            // window.location.href = `${import.meta.env.BASE_URL}error/500`;
         }
 
         // Format error for easier handling in components
