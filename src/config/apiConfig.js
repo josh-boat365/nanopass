@@ -75,6 +75,37 @@ const API_ENDPOINTS = {
         ACTIVE: '/permissions/active',
     },
 
+    // Personal Key endpoints
+    PERSONAL_KEYS: {
+        LIST: '/personal-keys',
+        SHOW: (id) => `/personal-keys/${id}`,
+        CREATE: '/personal-keys',
+        UPDATE: (id) => `/personal-keys/${id}`,
+        DELETE: (id) => `/personal-keys/${id}`,
+        VERIFY: (id) => `/personal-keys/${id}/verify`,
+        SEARCH: '/personal-keys/search',
+    },
+
+    // Department endpoints
+    DEPARTMENTS: {
+        LIST: '/departments',
+        SHOW: (id) => `/departments/${id}`,
+        CREATE: '/departments',
+        UPDATE: (id) => `/departments/${id}`,
+        DELETE: (id) => `/departments/${id}`,
+        GET_USERS: (id) => `/departments/${id}/users`,
+    },
+
+    // Description endpoints
+    DESCRIPTIONS: {
+        LIST: '/descriptions',
+        SHOW: (id) => `/descriptions/${id}`,
+        CREATE: '/descriptions',
+        UPDATE: (id) => `/descriptions/${id}`,
+        DELETE: (id) => `/descriptions/${id}`,
+        BY_SYSTEM: (systemId) => `/descriptions/system/${systemId}`,
+    },
+
     // Audit Trail endpoints
     AUDIT_TRAILS: {
         LIST: '/audit-trails',
