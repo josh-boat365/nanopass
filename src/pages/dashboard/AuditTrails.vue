@@ -1,0 +1,930 @@
+<script setup>
+import { ref, onMounted, computed, watch } from "vue";
+import BaseLayout from "@/layouts/AppLayout.vue";
+import {
+  Search,
+  Download,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+} from "lucide-vue-next";
+import apiClient from "@/services/apiClient";
+import { API_ENDPOINTS } from "@/config/apiConfig";
+import { useToast } from "@/composables/useToast";
+import { useUserStore } from "@/stores/useUserStore";
+import * as XLSX from "xlsx";
+
+const { success, error: showError } = useToast();
+const userStore = useUserStore();
+
+// State management
+const searchQuery = ref("");
+const filterCategory = ref("all");
+const filterStatus = ref("all");
+const filterStartDate = ref("");
+const filterEndDate = ref("");
+const loading = ref(false);
+const currentPage = ref(1);
+const itemsPerPage = 20;
+
+// Audit trail data
+const auditTrails = ref([]);
+
+// Filtered trails with all filters applied
+const filteredTrails = computed(() => {
+  let results = auditTrails.value;
+
+  // Filter by search query (username, email, action description)
+  if (searchQuery.value.trim()) {
+    const query = searchQuery.value.toLowerCase();
+    results = results.filter(
+      (trail) =>
+        (trail.user?.username || "").toLowerCase().includes(query) ||
+        (trail.user?.email || "").toLowerCase().includes(query) ||
+        (trail.description || "").toLowerCase().includes(query) ||
+        (trail.ip_address || "").toLowerCase().includes(query)
+    );
+  }
+
+  // Filter by category
+  if (filterCategory.value !== "all") {
+    results = results.filter(
+      (trail) => trail.action_category === filterCategory.value
+    );
+  }
+
+  // Filter by status
+  if (filterStatus.value !== "all") {
+    results = results.filter((trail) => trail.status === filterStatus.value);
+  }
+
+  // Filter by date range
+  if (filterStartDate.value) {
+    const startDate = new Date(filterStartDate.value);
+    results = results.filter(
+      (trail) => new Date(trail.created_at) >= startDate
+    );
+  }
+
+  if (filterEndDate.value) {
+    const endDate = new Date(filterEndDate.value);
+    endDate.setHours(23, 59, 59, 999);
+    results = results.filter((trail) => new Date(trail.created_at) <= endDate);
+  }
+
+  return results;
+});
+
+// Paginated trails
+const paginatedTrails = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return filteredTrails.value.slice(start, end);
+});
+
+// Total pages
+const totalPages = computed(() => {
+  return Math.ceil(filteredTrails.value.length / itemsPerPage);
+});
+
+// Unique categories from audit trails
+const uniqueCategories = computed(() => {
+  const categories = new Set(
+    auditTrails.value.map((trail) => trail.action_category).filter((cat) => cat)
+  );
+  return Array.from(categories).sort();
+});
+
+// Color mappings for categories
+const categoryColors = {
+  USER: "bg-blue-100 text-blue-800",
+  SYSTEM: "bg-purple-100 text-purple-800",
+  PASSWORD: "bg-red-100 text-red-800",
+  PERMISSION: "bg-green-100 text-green-800",
+  PERSONAL_KEY: "bg-yellow-100 text-yellow-800",
+  ADMIN: "bg-orange-100 text-orange-800",
+  POLICY: "bg-pink-100 text-pink-800",
+  DEPARTMENT: "bg-indigo-100 text-indigo-800",
+  CATEGORY: "bg-teal-100 text-teal-800",
+  DESCRIPTION: "bg-cyan-100 text-cyan-800",
+  OTHER: "bg-gray-100 text-gray-800",
+  UNKNOWN: "bg-gray-100 text-gray-800",
+};
+
+const getCategoryColor = (category) => {
+  return categoryColors[category] || categoryColors.OTHER;
+};
+
+// Determine the proper category based on action and model_type
+const getCategoryFromAction = (trail) => {
+  // If action_category is properly set and not "OTHER", use it
+  if (trail.action_category && trail.action_category !== "OTHER") {
+    return trail.action_category;
+  }
+
+  const action = trail.action || "";
+  const modelType = trail.model_type || "";
+
+  // Check based on action name
+  if (action.includes("PERMISSION")) return "PERMISSION";
+  if (action.includes("PASSWORD")) return "PASSWORD";
+  if (action.includes("PERSONAL_KEY")) return "PERSONAL_KEY";
+  if (action.includes("POLICY")) return "POLICY";
+  if (action.includes("ADMIN")) return "ADMIN";
+
+  // Check based on model type
+  if (modelType.includes("Permission")) return "PERMISSION";
+  if (modelType.includes("Password")) return "PASSWORD";
+  if (modelType.includes("PersonalKey")) return "PERSONAL_KEY";
+  if (modelType.includes("User")) return "USER";
+  if (modelType.includes("System")) return "SYSTEM";
+  if (modelType.includes("Category")) return "CATEGORY";
+  if (modelType.includes("Department")) return "DEPARTMENT";
+  if (modelType.includes("Policy")) return "POLICY";
+  if (modelType.includes("Description")) return "DESCRIPTION";
+
+  return trail.action_category || "OTHER";
+};
+
+// Get model name from model_type
+const getModelName = (modelType) => {
+  if (!modelType) return "Resource";
+  const parts = modelType.split("\\");
+  return parts[parts.length - 1] || "Resource";
+};
+
+// Format action descriptions for non-technical users
+const getHumanReadableAction = (trail) => {
+  const action = trail.action || "";
+  const oldValues = trail.old_values || {};
+  const newValues = trail.new_values || {};
+
+  // Permission actions (PERMISSION_ASSIGN, PERMISSION_REVOKE)
+  if (action.includes("PERMISSION")) {
+    const targetUser =
+      newValues.target_user_username ||
+      newValues.user_username ||
+      trail.affected_user?.username ||
+      "a user";
+    const systemName = newValues.system_name || "a system";
+
+    if (action.includes("ASSIGN")) {
+      return `Permission Assigned: ${targetUser} → ${systemName || "system"}`;
+    } else if (action.includes("REVOKE")) {
+      return `Permission Revoked: ${targetUser} ← ${systemName || "system"}`;
+    }
+    return `Permission Updated for ${targetUser}`;
+  }
+
+  // Password actions
+  if (action.includes("PASSWORD") || trail.model_type?.includes("Password")) {
+    const system =
+      newValues.system_name ||
+      oldValues.system_name ||
+      newValues.title ||
+      "system";
+    const actionType = action.split("_").pop();
+
+    if (actionType === "CREATE") {
+      return `Password Created: ${system}`;
+    } else if (actionType === "UPDATE") {
+      return `Password Updated: ${system}`;
+    } else if (actionType === "DELETE") {
+      return `Password Deleted: ${system}`;
+    } else if (actionType.includes("REVEAL") || actionType.includes("ACCESS")) {
+      return `Password Revealed: ${system}`;
+    } else if (actionType.includes("COPY")) {
+      return `Password Copied: ${system}`;
+    }
+    return `Password ${actionType}: ${system}`;
+  }
+
+  // Personal key actions
+  if (
+    action.includes("PERSONAL_KEY") ||
+    trail.model_type?.includes("PersonalKey")
+  ) {
+    const keyName = newValues.key_name || oldValues.key_name || "key";
+    if (action.includes("REVEAL") || action.includes("VIEW")) {
+      return `Personal Key Revealed: ${keyName}`;
+    } else if (action.includes("COPY")) {
+      return `Personal Key Copied: ${keyName}`;
+    }
+    const actionType = action.split("_").pop();
+    return `Personal Key ${actionType}: ${keyName}`;
+  }
+
+  // User actions (CREATE, UPDATE, DELETE)
+  if (trail.model_type?.includes("User")) {
+    const username =
+      newValues.target_user_username ||
+      newValues.user_username ||
+      oldValues.username ||
+      "user";
+    const actionType =
+      action === "CREATE"
+        ? "CREATE"
+        : action === "UPDATE"
+        ? "UPDATE"
+        : "DELETE";
+
+    if (actionType === "CREATE") {
+      return `User Created: ${username}`;
+    } else if (actionType === "UPDATE") {
+      return `User Updated: ${username}`;
+    } else if (actionType === "DELETE") {
+      return `User Deleted: ${username}`;
+    }
+  }
+
+  // System actions
+  if (trail.model_type?.includes("System")) {
+    const systemName =
+      newValues.system_name || oldValues.system_name || "system";
+    const actionType = action;
+
+    if (actionType === "CREATE") {
+      return `System Created: ${systemName}`;
+    } else if (actionType === "UPDATE") {
+      return `System Updated: ${systemName}`;
+    } else if (actionType === "DELETE") {
+      return `System Deleted: ${systemName}`;
+    }
+  }
+
+  // Category actions
+  if (trail.model_type?.includes("Category")) {
+    const categoryName = newValues.name || oldValues.name || "category";
+    const actionType = action;
+
+    if (actionType === "CREATE") {
+      return `Category Created: ${categoryName}`;
+    } else if (actionType === "UPDATE") {
+      return `Category Updated: ${categoryName}`;
+    } else if (actionType === "DELETE") {
+      return `Category Deleted: ${categoryName}`;
+    }
+  }
+
+  // Generic fallback
+  if (trail.description && trail.description !== "OTHER UNKNOWN") {
+    return trail.description;
+  }
+
+  // Ultimate fallback - parse action and model name
+  const modelName = getModelName(trail.model_type);
+  const actionType = action.replace(/_/g, " ");
+  return `${actionType} ${modelName}`;
+};
+
+// Get status display and color
+const getStatusDisplay = (status) => {
+  const statuses = {
+    SUCCESS: { label: "Success", color: "bg-green-100 text-green-800" },
+    FAILED: { label: "Failed", color: "bg-red-100 text-red-800" },
+    PENDING: { label: "Pending", color: "bg-yellow-100 text-yellow-800" },
+  };
+  return (
+    statuses[status] || {
+      label: status || "Unknown",
+      color: "bg-gray-100 text-gray-800",
+    }
+  );
+};
+
+// Extract OS from user agent
+const getOperatingSystem = (userAgent) => {
+  if (!userAgent) return "Unknown";
+
+  if (userAgent.includes("Windows")) return "Windows";
+  if (userAgent.includes("Mac")) return "macOS";
+  if (userAgent.includes("Linux")) return "Linux";
+  if (userAgent.includes("iPhone")) return "iOS";
+  if (userAgent.includes("Android")) return "Android";
+  if (userAgent.includes("iPad")) return "iPadOS";
+
+  return "Unknown OS";
+};
+
+// Extract browser from user agent
+const getBrowser = (userAgent) => {
+  if (!userAgent) return "Unknown";
+
+  if (userAgent.includes("Chrome")) return "Chrome";
+  if (userAgent.includes("Safari")) return "Safari";
+  if (userAgent.includes("Firefox")) return "Firefox";
+  if (userAgent.includes("Edge")) return "Edge";
+  if (userAgent.includes("Opera")) return "Opera";
+  if (userAgent.includes("Trident")) return "Internet Explorer";
+
+  return "Unknown Browser";
+};
+
+// Format the previous changes for display
+const getPreviousChangeSummary = (trail) => {
+  const oldValues = trail.old_values;
+  if (!oldValues || Object.keys(oldValues).length === 0) {
+    return "No previous state";
+  }
+
+  const summaries = [];
+  const action = trail.action_type || trail.action || "";
+  const fieldsToSkip = [
+    "id",
+    "user_id",
+    "admin_id",
+    "system_id",
+    "permission_id",
+    "created_at",
+    "updated_at",
+    "target_user_id",
+  ];
+
+  if (action.includes("PERMISSION")) {
+    if (oldValues.date_time_expiry) {
+      summaries.push(`Expires: ${formatDate(oldValues.date_time_expiry)}`);
+    }
+    if (oldValues.user_username) {
+      summaries.push(`User: ${oldValues.user_username}`);
+    }
+  } else if (action.includes("PASSWORD")) {
+    if (oldValues.system_name) {
+      summaries.push(`System: ${oldValues.system_name}`);
+    }
+  } else if (action.includes("USER")) {
+    if (oldValues.username) {
+      summaries.push(`Username: ${oldValues.username}`);
+    }
+    if (oldValues.email) {
+      summaries.push(`Email: ${oldValues.email}`);
+    }
+    if (oldValues.is_admin !== undefined) {
+      summaries.push(`Admin: ${oldValues.is_admin ? "Yes" : "No"}`);
+    }
+  } else {
+    // Generic fallback for actions not explicitly handled above
+    Object.entries(oldValues).forEach(([key, value]) => {
+      if (
+        !fieldsToSkip.includes(key) &&
+        value !== null &&
+        value !== undefined &&
+        value !== ""
+      ) {
+        const label = key
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+        let displayValue = value;
+
+        // Check if value is a date string (ISO format or similar)
+        if (typeof value === "string" && /\d{4}-\d{2}-\d{2}/.test(value)) {
+          displayValue = formatDate(value);
+        } else if (typeof value === "boolean") {
+          displayValue = value ? "Yes" : "No";
+        }
+
+        summaries.push(`${label}: ${displayValue}`);
+      }
+    });
+  }
+
+  return summaries.length > 0 ? summaries.join(" • ") : "No changes";
+};
+
+// Format the current changes for display
+const getCurrentChangeSummary = (trail) => {
+  const newValues = trail.new_values;
+  if (!newValues || Object.keys(newValues).length === 0) {
+    return "No current state";
+  }
+
+  const summaries = [];
+  const action = trail.action_type || trail.action || "";
+  const fieldsToSkip = [
+    "id",
+    "user_id",
+    "admin_id",
+    "system_id",
+    "permission_id",
+    "created_at",
+    "updated_at",
+    "target_user_id",
+  ];
+
+  if (action.includes("PERMISSION")) {
+    if (newValues.date_time_expiry) {
+      summaries.push(`Expires: ${formatDate(newValues.date_time_expiry)}`);
+    }
+    if (newValues.user_username) {
+      summaries.push(`User: ${newValues.user_username}`);
+    }
+  } else if (action.includes("PASSWORD")) {
+    if (newValues.system_name) {
+      summaries.push(`System: ${newValues.system_name}`);
+    }
+  } else if (action.includes("USER")) {
+    if (newValues.username) {
+      summaries.push(`Username: ${newValues.username}`);
+    }
+    if (newValues.email) {
+      summaries.push(`Email: ${newValues.email}`);
+    }
+    if (newValues.is_admin !== undefined) {
+      summaries.push(`Admin: ${newValues.is_admin ? "Yes" : "No"}`);
+    }
+  } else {
+    // Generic fallback for actions not explicitly handled above
+    Object.entries(newValues).forEach(([key, value]) => {
+      if (
+        !fieldsToSkip.includes(key) &&
+        value !== null &&
+        value !== undefined &&
+        value !== ""
+      ) {
+        const label = key
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+        let displayValue = value;
+
+        // Check if value is a date string (ISO format or similar)
+        if (typeof value === "string" && /\d{4}-\d{2}-\d{2}/.test(value)) {
+          displayValue = formatDate(value);
+        } else if (typeof value === "boolean") {
+          displayValue = value ? "Yes" : "No";
+        }
+
+        summaries.push(`${label}: ${displayValue}`);
+      }
+    });
+  }
+
+  return summaries.length > 0 ? summaries.join(" • ") : "No changes";
+};
+
+// Format date for display
+const formatDate = (dateString) => {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const day = date.getDate();
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+
+  return `${day} - ${month} - ${year}, ${hours}:${minutes}${ampm}`;
+};
+
+// Export to Excel
+const exportToExcel = () => {
+  try {
+    if (filteredTrails.value.length === 0) {
+      showError("No data to export");
+      return;
+    }
+
+    const exportData = filteredTrails.value.map((trail) => ({
+      Timestamp: formatDate(trail.created_at),
+      User: `${trail.user?.username || "N/A"} (${trail.user?.email || "N/A"})`,
+      "User Type": trail.user?.admin ? "Admin" : "User",
+      Action: getHumanReadableAction(trail),
+      Category: trail.action_category || "N/A",
+      Status: getStatusDisplay(trail.status).label,
+      "IP Address": trail.ip_address || "N/A",
+      "Operating System": getOperatingSystem(trail.user_agent),
+      Browser: getBrowser(trail.user_agent),
+      "Previous State": getPreviousChangeSummary(trail),
+      "Current State": getCurrentChangeSummary(trail),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Audit Trails");
+    XLSX.writeFile(
+      workbook,
+      `audit-trails-${new Date().toISOString().split("T")[0]}.xlsx`
+    );
+    success("Audit trails exported successfully");
+  } catch (err) {
+    console.error("Export failed:", err);
+    showError("Failed to export audit trails");
+  }
+};
+
+// Fetch audit trails from backend
+const fetchAuditTrails = async () => {
+  loading.value = true;
+  try {
+    console.log("📥 Fetching audit trails...");
+
+    const endpoint = API_ENDPOINTS.AUDIT_TRAILS?.LIST || "/audit-trails";
+    const response = await apiClient.get(endpoint);
+
+    const trailsData = response.data?.data || response.data || [];
+    auditTrails.value = Array.isArray(trailsData) ? trailsData : [];
+    console.log("✅ Audit trails loaded:", auditTrails.value.length);
+  } catch (err) {
+    console.error("❌ Error fetching audit trails:", err);
+
+    if (err.response?.status === 404 || err.code === "ERR_NOT_FOUND") {
+      console.warn(
+        "Audit Trail API endpoint not yet implemented on backend. Using demo data instead."
+      );
+      auditTrails.value = [];
+    }
+  } finally {
+    loading.value = false;
+  }
+};
+
+// Reset pagination when filters change
+watch(
+  [searchQuery, filterCategory, filterStatus, filterStartDate, filterEndDate],
+  () => {
+    currentPage.value = 1;
+  }
+);
+
+// Initialize on component mount
+onMounted(() => {
+  fetchAuditTrails();
+});
+</script>
+
+<template>
+  <BaseLayout>
+    <div class="min-h-screen bg-gray-50">
+      <div class="p-6">
+        <!-- Page Header -->
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-gray-900">Audit Trails</h1>
+          <p class="mt-2 text-gray-600">
+            {{
+              userStore.isAdmin
+                ? "Track all system activities and user actions across the platform"
+                : "View your personal activity history"
+            }}
+          </p>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="grid gap-4 md:grid-cols-3 mb-8">
+          <div class="rounded-lg border bg-white p-6 shadow-sm">
+            <p class="text-sm text-gray-600">Total Activities</p>
+            <p class="mt-2 text-3xl font-bold text-gray-900">
+              {{ auditTrails.length }}
+            </p>
+            <p class="mt-1 text-xs text-gray-500">All recorded events</p>
+          </div>
+
+          <div class="rounded-lg border bg-white p-6 shadow-sm">
+            <p class="text-sm text-gray-600">Recent 24 Hours</p>
+            <p class="mt-2 text-3xl font-bold text-blue-600">
+              {{
+                auditTrails.filter((t) => {
+                  const date = new Date(t.created_at);
+                  const now = new Date();
+                  return (now - date) / (1000 * 60 * 60) <= 24;
+                }).length
+              }}
+            </p>
+            <p class="mt-1 text-xs text-gray-500">Last day activities</p>
+          </div>
+
+          <div class="rounded-lg border bg-white p-6 shadow-sm">
+            <p class="text-sm text-gray-600">Filtered Results</p>
+            <p class="mt-2 text-3xl font-bold text-purple-600">
+              {{ filteredTrails.length }}
+            </p>
+            <p class="mt-1 text-xs text-gray-500">Current filter results</p>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="loading" class="flex items-center justify-center py-12">
+          <Loader2 class="h-8 w-8 animate-spin text-gray-400 mr-2" />
+          <span class="text-gray-600">Loading audit trails...</span>
+        </div>
+
+        <!-- Filters and Table -->
+        <div v-else class="space-y-6">
+          <!-- Filters Section -->
+          <div class="rounded-lg border bg-white p-6 shadow-sm">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Filters</h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <!-- Search -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Search
+                </label>
+                <div class="relative">
+                  <Search
+                    class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    v-model="searchQuery"
+                    type="text"
+                    placeholder="Username, email, IP..."
+                    class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <!-- Category Filter -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Category
+                </label>
+                <select
+                  v-model="filterCategory"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                >
+                  <option value="all">All Categories</option>
+                  <option
+                    v-for="category in uniqueCategories"
+                    :key="category"
+                    :value="category"
+                  >
+                    {{ category }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Status Filter -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Status
+                </label>
+                <select
+                  v-model="filterStatus"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="SUCCESS">Success</option>
+                  <option value="FAILED">Failed</option>
+                  <option value="PENDING">Pending</option>
+                </select>
+              </div>
+
+              <!-- Export Button -->
+              <div class="flex items-end">
+                <button
+                  @click="exportToExcel"
+                  :disabled="filteredTrails.length === 0"
+                  class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download class="h-4 w-4" />
+                  <span>Export</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Date Range Filters -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  From Date
+                </label>
+                <input
+                  v-model="filterStartDate"
+                  type="date"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  To Date
+                </label>
+                <input
+                  v-model="filterEndDate"
+                  type="date"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Results count -->
+          <div class="text-sm text-gray-600">
+            Showing {{ paginatedTrails.length }} of
+            {{ filteredTrails.length }} activities
+          </div>
+
+          <!-- Table -->
+          <div class="rounded-lg border bg-white shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="border-b bg-gray-50">
+                    <th
+                      class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      User
+                    </th>
+                    <th
+                      class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      Action
+                    </th>
+                    <th
+                      class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      Status
+                    </th>
+                    <th
+                      class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      Previous State
+                    </th>
+                    <th
+                      class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      Current State
+                    </th>
+                    <th
+                      class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      IP Address
+                    </th>
+                    <th
+                      class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      Device
+                    </th>
+                    <th
+                      class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                    >
+                      Timestamp
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y">
+                  <tr
+                    v-if="paginatedTrails.length === 0"
+                    class="hover:bg-gray-50"
+                  >
+                    <td colspan="8" class="px-4 py-8 text-center">
+                      <div class="flex flex-col items-center justify-center">
+                        <AlertCircle class="h-8 w-8 text-gray-300 mb-2" />
+                        <p class="text-gray-600">No audit trails found</p>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr
+                    v-for="trail in paginatedTrails"
+                    :key="trail.id"
+                    class="hover:bg-gray-50 transition-colors"
+                  >
+                    <!-- User Column -->
+                    <td class="px-4 py-3">
+                      <div class="flex items-center gap-2">
+                        <div
+                          class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-xs font-semibold text-blue-900 shrink-0"
+                        >
+                          {{
+                            (trail.user?.username || "U")
+                              .substring(0, 2)
+                              .toUpperCase()
+                          }}
+                        </div>
+                        <div class="min-w-0">
+                          <div class="text-sm font-medium text-gray-900">
+                            {{ trail.user?.username || "N/A" }}
+                          </div>
+                          <div class="text-xs text-gray-500 truncate">
+                            {{ trail.user?.email || "N/A" }}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <!-- Action Column -->
+                    <td class="px-4 py-3">
+                      <div class="flex flex-col gap-2">
+                        <div class="text-sm text-gray-900 font-medium max-w-xs">
+                          {{ getHumanReadableAction(trail) }}
+                        </div>
+                        <span
+                          :class="[
+                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit',
+                            getCategoryColor(getCategoryFromAction(trail)),
+                          ]"
+                        >
+                          {{ getCategoryFromAction(trail) }}
+                        </span>
+                      </div>
+                    </td>
+
+                    <!-- Status Column -->
+                    <td class="px-4 py-3">
+                      <span
+                        :class="[
+                          'inline-flex items-center px-2 py-1 rounded text-xs font-medium',
+                          getStatusDisplay(trail.status).color,
+                        ]"
+                      >
+                        {{ getStatusDisplay(trail.status).label }}
+                      </span>
+                    </td>
+
+                    <!-- Previous State Column -->
+                    <td class="px-4 py-3">
+                      <div
+                        class="bg-gray-100 rounded-md p-3 text-xs text-gray-700 max-w-xs"
+                      >
+                        {{ getPreviousChangeSummary(trail) }}
+                      </div>
+                    </td>
+
+                    <!-- Current State Column -->
+                    <td class="px-4 py-3">
+                      <div
+                        class="bg-green-100 rounded-md p-3 text-xs text-green-700 max-w-xs"
+                      >
+                        {{ getCurrentChangeSummary(trail) }}
+                      </div>
+                    </td>
+
+                    <!-- IP Address Column -->
+                    <td class="px-4 py-3 text-xs font-mono text-gray-600">
+                      {{ trail.ip_address || "N/A" }}
+                    </td>
+
+                    <!-- Device Column (OS + Browser) -->
+                    <td class="px-4 py-3 text-xs">
+                      <div class="space-y-0.5">
+                        <div class="text-gray-900 font-medium">
+                          {{ getOperatingSystem(trail.user_agent) }}
+                        </div>
+                        <div class="text-gray-500">
+                          {{ getBrowser(trail.user_agent) }}
+                        </div>
+                      </div>
+                    </td>
+
+                    <!-- Timestamp Column -->
+                    <td
+                      class="px-4 py-3 text-xs text-gray-600 whitespace-nowrap"
+                    >
+                      {{ formatDate(trail.created_at) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Pagination -->
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-600">
+              Page {{ currentPage }} of {{ totalPages || 1 }}
+            </div>
+
+            <div class="flex gap-2">
+              <button
+                @click="currentPage--"
+                :disabled="currentPage === 1"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-900 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft class="h-4 w-4" />
+                <span>Previous</span>
+              </button>
+
+              <button
+                @click="currentPage++"
+                :disabled="currentPage === totalPages"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-900 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span>Next</span>
+                <ChevronRight class="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </BaseLayout>
+</template>
