@@ -1,6 +1,7 @@
 <script setup>
 import BaseLayout from "@/layouts/AppLayout.vue";
 import { ref, computed, onMounted } from "vue";
+import { storeToRefs } from "pinia";
 import {
   Eye,
   EyeOff,
@@ -17,8 +18,15 @@ import {
 import apiClient from "@/services/apiClient";
 import { API_ENDPOINTS } from "@/config/apiConfig";
 import { useToast } from "@/composables/useToast";
+import { usePersonalKeyStore } from "@/stores/usePersonalKeyStore";
 
 const { success, error: showError } = useToast();
+const personalKeyStore = usePersonalKeyStore();
+const {
+  personalKeys,
+  loading,
+  error: storeError,
+} = storeToRefs(personalKeyStore);
 
 const showPasswordModal = ref(false);
 const showCreateModal = ref(false);
@@ -32,7 +40,6 @@ const showPassword = ref(false);
 const searchQuery = ref("");
 const currentPage = ref(1);
 const itemsPerPage = 15;
-const loading = ref(false);
 const submitting = ref(false);
 const verifyingPassword = ref(false);
 
@@ -49,9 +56,6 @@ const formErrors = ref({
   key: "",
 });
 
-// Personal keys data from API
-const personalKeys = ref([]);
-
 const maskPassword = (password) => {
   return "•".repeat(12);
 };
@@ -61,24 +65,8 @@ const maskPassword = (password) => {
 // ========================================
 
 onMounted(async () => {
-  await loadPersonalKeys();
+  await personalKeyStore.getAllPersonalKeys();
 });
-
-const loadPersonalKeys = async () => {
-  loading.value = true;
-  try {
-    console.log("📥 Loading personal keys...");
-    const response = await apiClient.get("/personal-keys");
-    personalKeys.value = response.data.data || response.data || [];
-    console.log("✅ Personal keys loaded:", personalKeys.value.length);
-  } catch (err) {
-    console.error("❌ Error loading personal keys:", err);
-    showError("Failed to load personal keys");
-    personalKeys.value = [];
-  } finally {
-    loading.value = false;
-  }
-};
 
 // Computed: Filtered keys based on search
 const filteredKeys = computed(() => {
@@ -139,35 +127,70 @@ const handleVerifyPassword = async () => {
   passwordError.value = "";
 
   try {
-    // Call API to verify personal key with user account password
-    const personalKeyId = selectedPassword.value.id;
-    const endpoint = `/personal-keys/${personalKeyId}/verify`;
-    const response = await apiClient.post(endpoint, {
+    // Step 1: Verify user's account password first
+    const verifyEndpoint =
+      API_ENDPOINTS.AUTH?.VERIFY_PASSWORD || "/verify-password";
+    const verifyResponse = await apiClient.post(verifyEndpoint, {
       password: accountPassword.value,
     });
 
     // Check if password verification was successful
-    if (response.data?.success === true && response.data?.data) {
-      // Password verified successfully - backend returns the personal key data
-      console.log("✅ Personal key verified:", response.data.data.keyname);
+    if (
+      verifyResponse.data?.success === true &&
+      verifyResponse.data?.data?.password_match === true
+    ) {
+      // Password verified successfully
+      console.log(
+        "✅ Password verified for user:",
+        verifyResponse.data.data.username
+      );
 
-      const keyData = response.data.data;
+      // Step 2: Now call the personal key verify endpoint to get the actual key
+      try {
+        const verifiedKey = await personalKeyStore.verifyPersonalKey(
+          selectedPassword.value.id,
+          accountPassword.value
+        );
 
-      // Build the revealed password object with extracted fields
-      revealedPassword.value = {
-        ...selectedPassword.value,
-        id: keyData.id,
-        keyname: keyData.keyname || "Unknown",
-        description: keyData.description || "N/A",
-        key: keyData.key || "Unable to retrieve key",
-      };
+        // Check if key verification was successful
+        if (verifiedKey && verifiedKey.key) {
+          revealedPassword.value = {
+            ...verifiedKey,
+            masked: maskPassword(verifiedKey.key),
+          };
 
-      success("Password verified successfully!");
-      accountPassword.value = "";
+          console.log(
+            "✅ Personal key verified:",
+            revealedPassword.value.keyname
+          );
+
+          // Log the reveal action to audit trail
+          try {
+            await apiClient.post("audit-trails/log-key-copied", {
+              key_type: "personal",
+              key_id: selectedPassword.value.id,
+              key_name: selectedPassword.value.keyname,
+              access_type: "revealed", // Specify that this is a reveal action
+            });
+            console.log("✅ Personal key reveal event logged");
+          } catch (auditErr) {
+            console.warn("Failed to log key reveal event:", auditErr);
+            // Don't fail the reveal operation if logging fails
+          }
+
+          success("Personal key verified successfully!");
+          accountPassword.value = "";
+        } else {
+          passwordError.value = "Failed to retrieve key";
+        }
+      } catch (keyErr) {
+        console.error("Error verifying personal key:", keyErr);
+        passwordError.value = "Verified but unable to retrieve personal key.";
+      }
     } else {
       // Password verification failed
       passwordError.value =
-        response.data?.message || "Invalid password. Please try again.";
+        verifyResponse.data?.message || "Invalid password. Please try again.";
     }
   } catch (err) {
     console.error("Password verification failed:", err);
@@ -175,6 +198,63 @@ const handleVerifyPassword = async () => {
       err.response?.data?.message || "Invalid password. Please try again.";
   } finally {
     verifyingPassword.value = false;
+  }
+};
+
+// Helper function for countdown display
+const displayLockoutCountdown = (lockedUntil) => {
+  const unlockTime = new Date(lockedUntil);
+  const interval = setInterval(() => {
+    const now = new Date();
+    const secondsLeft = Math.floor((unlockTime - now) / 1000);
+
+    if (secondsLeft <= 0) {
+      clearInterval(interval);
+      passwordError.value = "You can try again now";
+    } else {
+      const minutes = Math.floor(secondsLeft / 60);
+      const seconds = secondsLeft % 60;
+      const timeStr = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+      passwordError.value = `Account locked. Try again in ${timeStr}`;
+    }
+  }, 1000);
+};
+
+// New handler for copying personal key to clipboard and logging
+const handleCopyKey = async () => {
+  if (!revealedPassword.value) return;
+
+  try {
+    // Copy to system clipboard
+    await navigator.clipboard.writeText(revealedPassword.value.key);
+
+    // Log the copy event
+    try {
+      await apiClient.post("audit-trails/log-key-copied", {
+        key_type: "personal",
+        key_id: selectedPassword.value.id,
+        key_name: selectedPassword.value.keyname,
+        access_type: "copied", // Specify that this is a copy action
+      });
+      console.log("✅ Personal key copy event logged");
+    } catch (logErr) {
+      console.warn("Failed to log copy event:", logErr);
+      // Don't fail the copy operation if logging fails
+    }
+
+    success("Key copied to clipboard!");
+
+    // Optional: Clear clipboard after 30 seconds for security
+    setTimeout(async () => {
+      try {
+        await navigator.clipboard.writeText("");
+      } catch (e) {
+        // Clipboard clear may not be supported in all browsers
+      }
+    }, 30000);
+  } catch (err) {
+    console.error("Failed to copy key:", err);
+    showError("Failed to copy key to clipboard");
   }
 };
 
@@ -239,19 +319,18 @@ const handleCreatePassword = async () => {
   submitting.value = true;
   try {
     console.log("📤 Creating personal key...");
-    const response = await apiClient.post("/personal-keys", {
+    await personalKeyStore.createPersonalKey({
       keyname: formData.value.keyname,
       description: formData.value.description,
       key: formData.value.key,
     });
 
-    console.log("✅ Personal key created:", response.data);
+    console.log("✅ Personal key created");
     success("Personal key created successfully!");
-    await loadPersonalKeys();
     handleCloseModal();
   } catch (err) {
     console.error("❌ Error creating personal key:", err);
-    showError(err.response?.data?.message || "Failed to create personal key");
+    showError(err.message || "Failed to create personal key");
   } finally {
     submitting.value = false;
   }
@@ -273,22 +352,18 @@ const handleUpdatePassword = async () => {
   submitting.value = true;
   try {
     console.log("📤 Updating personal key:", selectedPassword.value.id);
-    const response = await apiClient.put(
-      `/personal-keys/${selectedPassword.value.id}`,
-      {
-        keyname: formData.value.keyname,
-        description: formData.value.description,
-        key: formData.value.key,
-      }
-    );
+    await personalKeyStore.updatePersonalKey(selectedPassword.value.id, {
+      keyname: formData.value.keyname,
+      description: formData.value.description,
+      key: formData.value.key,
+    });
 
-    console.log("✅ Personal key updated:", response.data);
+    console.log("✅ Personal key updated");
     success("Personal key updated successfully!");
-    await loadPersonalKeys();
     handleCloseModal();
   } catch (err) {
     console.error("❌ Error updating personal key:", err);
-    showError(err.response?.data?.message || "Failed to update personal key");
+    showError(err.message || "Failed to update personal key");
   } finally {
     submitting.value = false;
   }
@@ -303,15 +378,14 @@ const handleConfirmDelete = async () => {
   submitting.value = true;
   try {
     console.log("🗑️ Deleting personal key:", selectedPassword.value.id);
-    await apiClient.delete(`/personal-keys/${selectedPassword.value.id}`);
+    await personalKeyStore.deletePersonalKey(selectedPassword.value.id);
 
     console.log("✅ Personal key deleted");
     success("Personal key deleted successfully!");
-    await loadPersonalKeys();
     handleCloseModal();
   } catch (err) {
     console.error("❌ Error deleting personal key:", err);
-    showError(err.response?.data?.message || "Failed to delete personal key");
+    showError(err.message || "Failed to delete personal key");
   } finally {
     submitting.value = false;
   }
@@ -704,10 +778,16 @@ const openCreateModal = () => {
               </div>
             </div>
 
-            <div class="border-t pt-4">
+            <div class="border-t pt-4 flex gap-3">
+              <button
+                @click="handleCopyKey"
+                class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Copy Key
+              </button>
               <button
                 @click="handleCloseModal"
-                class="w-full px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800"
+                class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 transition-colors"
               >
                 Close
               </button>
