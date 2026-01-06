@@ -10,7 +10,7 @@ import UserDashboard from "@/pages/dashboard/user/Index.vue";
 import UserDashboard2 from "@/pages/dashboard/user/Index2.vue";
 import UserAssignedKeys from "@/pages/dashboard/user/AssignedKeys.vue";
 import UserPersonalKeys from "@/pages/dashboard/user/PersonalKeys.vue";
-import AuthTrails from "@/pages/dashboard/AuthTrails.vue";
+import AuditTrails from "@/pages/dashboard/AuditTrails.vue";
 import Settings from "@/pages/dashboard/Settings.vue";
 import CreateUser from "@/pages/users/Create.vue";
 // import CreatePrivileges from "@/pages/privileges/Index.vue";
@@ -93,7 +93,7 @@ const routes = [{
 },
 {
   path: "/admin/dashboard/auth-trails",
-  component: AuthTrails,
+  component: AuditTrails,
   meta: {
     requiresAuth: true,
     role: ['admin']
