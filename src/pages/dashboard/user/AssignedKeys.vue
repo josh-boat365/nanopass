@@ -198,6 +198,8 @@ const formattedKeys = computed(() => {
     const daysLeft = calculateDaysLeft(perm.date_time_expiry);
     return {
       id: perm.id,
+      permission_id: perm.id,
+      password_id: perm.password_id,
       system_id: perm.system_id,
       systemName: getSystemName(perm.system_id),
       username: perm.user?.username || perm.username || "N/A",
@@ -276,70 +278,65 @@ const handleVerifyPassword = async () => {
   passwordError.value = "";
 
   try {
-    // Call API to verify password
-    const endpoint = API_ENDPOINTS.AUTH?.VERIFY_PASSWORD || "/verify-password";
-    const response = await apiClient.post(endpoint, {
+    // Step 1: Verify user's account password first
+    const verifyEndpoint =
+      API_ENDPOINTS.AUTH?.VERIFY_PASSWORD || "/verify-password";
+    const verifyResponse = await apiClient.post(verifyEndpoint, {
       password: accountPassword.value,
     });
 
     // Check if password verification was successful
     if (
-      response.data?.success === true &&
-      response.data?.data?.password_match === true
+      verifyResponse.data?.success === true &&
+      verifyResponse.data?.data?.password_match === true
     ) {
       // Password verified successfully
       console.log(
         "✅ Password verified for user:",
-        response.data.data.username
+        verifyResponse.data.data.username
       );
 
-      // Get the actual system password
+      // Step 2: Access password through proper endpoint with permission checks and logging
       try {
         const systemId = selectedPassword.value.system_id;
-        const passwordEndpoint = API_ENDPOINTS.SYSTEMS.GET_PASSWORD(systemId);
-        const passwordResponse = await apiClient.get(passwordEndpoint);
+        const currentUser = userStore.user;
 
-        // Extract password data - handle if response.data.data is the password object
-        let passwordData = passwordResponse.data?.data || {};
+        // Use proper password access endpoint that handles permissions, brute-force protection, and audit logging
+        // This endpoint automatically logs the reveal action with REVEAL access type
+        const accessResponse = await apiClient.post("/passwords/access", {
+          user_id: currentUser.id,
+          system_id: systemId,
+          password_id: selectedPassword.value.id, // Password ID if accessing specific password
+        });
 
-        // If password field contains a JSON string, parse it
-        if (typeof passwordData === "string") {
-          try {
-            passwordData = JSON.parse(passwordData);
-          } catch (e) {
-            console.warn("Could not parse password data as JSON");
-          }
-        }
+        // Extract password data from proper endpoint response
+        const passwordData = accessResponse.data?.data || {};
 
-        // If passwordData.password is a JSON string (the entire object), parse it
-        if (typeof passwordData.password === "string") {
-          try {
-            const parsedPasswordObj = JSON.parse(passwordData.password);
-            // Extract fields from the parsed object
-            passwordData = {
-              ...passwordData,
-              ...parsedPasswordObj,
-            };
-          } catch (e) {
-            console.warn("Could not parse password field as JSON");
-          }
-        }
-
-        // Build the revealed password object with extracted fields
+        // Build the revealed password object with data from /passwords/access endpoint
+        // The backend endpoint already handles audit logging for the reveal action
         revealedPassword.value = {
           ...selectedPassword.value,
-          title: passwordData.password.title || "Unknown",
-          username: passwordData.password.username || "Unknown",
+          title:
+            passwordData.password?.title || passwordData.title || "Unknown",
+          username:
+            passwordData.password?.username ||
+            passwordData.username ||
+            "Unknown",
           password:
-            passwordData.password.password || "Unable to retrieve password",
-          notes: passwordData.password.notes || "N/A",
+            passwordData.password?.encrypted_password ||
+            passwordData.password?.password ||
+            "Unable to retrieve password",
+          notes: passwordData.password?.notes || passwordData.notes || "N/A",
           is_active:
-            passwordData.is_active !== undefined
-              ? passwordData.is_active
+            passwordData.password?.is_active !== undefined
+              ? passwordData.password?.is_active
               : true,
         };
 
-        console.log("✅ Password data extracted:", revealedPassword.value);
+        console.log(
+          "✅ Password accessed and logged via /passwords/access endpoint:",
+          revealedPassword.value
+        );
         success("Password verified successfully!");
         accountPassword.value = "";
       } catch (pwdErr) {
@@ -350,7 +347,7 @@ const handleVerifyPassword = async () => {
     } else {
       // Password verification failed
       passwordError.value =
-        response.data?.message || "Invalid password. Please try again.";
+        verifyResponse.data?.message || "Invalid password. Please try again.";
     }
   } catch (err) {
     console.error("Password verification failed:", err);
@@ -358,6 +355,61 @@ const handleVerifyPassword = async () => {
       err.response?.data?.message || "Invalid password. Please try again.";
   } finally {
     verifyingPassword.value = false;
+  }
+};
+
+// Helper function to disable password input temporarily
+const disablePasswordInputFor = (milliseconds) => {
+  const passwordInput = document.querySelector(
+    'input[type="password"][placeholder*="password"]'
+  );
+  if (passwordInput) {
+    passwordInput.disabled = true;
+    setTimeout(() => {
+      passwordInput.disabled = false;
+      passwordInput.focus();
+    }, milliseconds);
+  }
+};
+
+// New handler for copying password to clipboard and logging
+const handleCopyPassword = async () => {
+  if (!revealedPassword.value) return;
+
+  try {
+    // Copy to system clipboard
+    await navigator.clipboard.writeText(revealedPassword.value.password);
+
+    // Log the copy event
+    try {
+      await apiClient.post("audit-trails/log-key-copied", {
+        key_type: "assigned",
+        key_id: selectedPassword.value.password_id,
+        key_name:
+          selectedPassword.value.title || selectedPassword.value.password_name,
+        system_id: selectedPassword.value.system_id,
+        system_name: getSystemName(selectedPassword.value.system_id),
+        access_type: "copied", // Specify that this is a copy action
+      });
+      console.log("✅ Copy event logged");
+    } catch (logErr) {
+      console.warn("Failed to log copy event:", logErr);
+      // Don't fail the copy operation if logging fails
+    }
+
+    success("Password copied to clipboard!");
+
+    // Optional: Clear clipboard after 30 seconds for security
+    setTimeout(async () => {
+      try {
+        await navigator.clipboard.writeText("");
+      } catch (e) {
+        // Clipboard clear may not be supported in all browsers
+      }
+    }, 30000);
+  } catch (err) {
+    console.error("Failed to copy password:", err);
+    showError("Failed to copy password to clipboard");
   }
 };
 
@@ -863,10 +915,16 @@ const toggleUsernameVisibility = () => {
               </div>
             </div>
 
-            <div class="border-t pt-4">
+            <div class="border-t pt-4 flex gap-3">
+              <button
+                @click="handleCopyPassword"
+                class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Copy Password
+              </button>
               <button
                 @click="handleCloseModal"
-                class="w-full px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800"
+                class="flex-1 px-4 py-2 text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 transition-colors"
               >
                 Close
               </button>
