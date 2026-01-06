@@ -323,6 +323,33 @@ const openEditModal = async (permissionToEdit) => {
   }
 };
 
+// Open edit modal for grouped permissions (multiple systems per user)
+const openEditGroupModal = (group) => {
+  try {
+    selectedPermission.value = {
+      user_id: group.user_id,
+      systems: group.systems.map((s) => ({
+        id: parseInt(s.id, 10),
+        system_id: parseInt(s.system_id, 10),
+        system_name: s.system_name,
+        date_time_expiry: s.date_time_expiry,
+      })),
+    };
+    formData.value.system_ids = group.systems.map((s) =>
+      parseInt(s.system_id, 10)
+    );
+    formData.value.user_id = group.user_id;
+    const expiryDate = new Date(group.systems[0].date_time_expiry);
+    formData.value.date_time_expiry = expiryDate.toISOString().split("T")[0];
+    systemSearchQuery.value = "";
+    errorMessage.value = "";
+    showEditModal.value = true;
+  } catch (err) {
+    console.error("Error loading permission:", err);
+    showError("Failed to load permission details");
+  }
+};
+
 const closeEditModal = () => {
   showEditModal.value = false;
   selectedPermission.value = null;
@@ -351,22 +378,29 @@ const closeDeleteModal = () => {
 
 // Toggle system selection
 const toggleSystemSelection = (systemId) => {
-  const index = formData.value.system_ids.indexOf(systemId);
+  const id = parseInt(systemId, 10);
+  const index = formData.value.system_ids.findIndex(
+    (sid) => parseInt(sid, 10) === id
+  );
   if (index > -1) {
     formData.value.system_ids.splice(index, 1);
   } else {
-    formData.value.system_ids.push(systemId);
+    formData.value.system_ids.push(id);
   }
 };
 
 // Check if system is selected
 const isSystemSelected = (systemId) => {
-  return formData.value.system_ids.includes(systemId);
+  const id = parseInt(systemId, 10);
+  return formData.value.system_ids.some((sid) => parseInt(sid, 10) === id);
 };
 
 // Remove system from selection
 const removeSystem = (systemId) => {
-  const index = formData.value.system_ids.indexOf(systemId);
+  const id = parseInt(systemId, 10);
+  const index = formData.value.system_ids.findIndex(
+    (sid) => parseInt(sid, 10) === id
+  );
   if (index > -1) {
     formData.value.system_ids.splice(index, 1);
   }
@@ -394,7 +428,7 @@ const validateForm = () => {
   return null;
 };
 
-// Create permission
+// Create permission - using bulk POST endpoint
 const addPermission = async () => {
   const validationError = validateForm();
   if (validationError) {
@@ -406,25 +440,29 @@ const addPermission = async () => {
     submitting.value = true;
     errorMessage.value = "";
 
-    // Create permission for each selected system
-    const promises = formData.value.system_ids.map((systemId) => {
-      const permissionData = {
-        user_id: formData.value.user_id,
-        system_id: systemId,
-        date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
-      };
-      return apiClient.post("/permissions", permissionData);
-    });
+    // Prepare permissions array for bulk create (one API call)
+    const permissions = formData.value.system_ids.map((systemId) => ({
+      system_id: systemId,
+      date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
+    }));
 
-    await Promise.all(promises);
-    success(
-      `Successfully assigned ${formData.value.system_ids.length} system(s) to user!`
-    );
-    await loadPermissions();
+    const requestData = {
+      user_id: formData.value.user_id,
+      permissions: permissions, // Send all systems in single request
+    };
 
-    setTimeout(() => {
-      closeAddModal();
-    }, 1500);
+    const response = await apiClient.post("/permissions", requestData);
+
+    if (response.data?.success) {
+      const count =
+        response.data.meta?.count || formData.value.system_ids.length;
+      success(`✓ Created ${count} permission(s)`);
+      await loadPermissions();
+
+      setTimeout(() => {
+        closeAddModal();
+      }, 1500);
+    }
   } catch (err) {
     console.error("Error creating permission:", err);
     errorMessage.value =
@@ -434,15 +472,10 @@ const addPermission = async () => {
   }
 };
 
-// Update permission
+// Update permission - handles adding new, removing, and updating expiry dates
 const updatePermission = async () => {
   if (!formData.value.date_time_expiry) {
     errorMessage.value = "Please select an expiry date";
-    return;
-  }
-
-  if (!formData.value.system_ids.length) {
-    errorMessage.value = "Please select at least one system";
     return;
   }
 
@@ -452,36 +485,91 @@ const updatePermission = async () => {
     submitting.value = true;
     errorMessage.value = "";
 
-    // Update all systems for this user with new expiry date
-    if (
-      selectedPermission.value.systems &&
-      Array.isArray(selectedPermission.value.systems)
-    ) {
-      const updatePromises = selectedPermission.value.systems.map((system) =>
-        apiClient.put(`/permissions/${system.id}`, {
-          user_id: selectedPermission.value.user_id,
-          system_id: system.system_id,
-          date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
-        })
-      );
+    // Get current assigned system IDs
+    const currentSystemIds = selectedPermission.value.systems.map((s) =>
+      parseInt(s.system_id, 10)
+    );
 
-      await Promise.all(updatePromises);
-      success("Permissions updated successfully!");
-    } else {
-      // Fallback for single update
-      const permissionData = {
-        user_id: formData.value.user_id,
-        system_id: formData.value.system_ids[0],
-        date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
-      };
+    // Get newly selected system IDs
+    const newSystemIds = formData.value.system_ids.map((id) =>
+      parseInt(id, 10)
+    );
 
-      await apiClient.put(
-        `/permissions/${selectedPermission.value.id}`,
-        permissionData
-      );
-      success("Permission updated successfully!");
+    // Find systems to remove (in current but not in new)
+    const systemsToRemove = currentSystemIds.filter(
+      (id) => !newSystemIds.includes(id)
+    );
+
+    // Find systems to add (in new but not in current)
+    const systemsToAdd = newSystemIds.filter(
+      (id) => !currentSystemIds.includes(id)
+    );
+
+    // Find systems to update (in both - just update expiry date)
+    const systemsToUpdate = selectedPermission.value.systems
+      .filter((s) => newSystemIds.includes(parseInt(s.system_id, 10)))
+      .map((s) => s.id);
+
+    console.log({
+      currentSystemIds,
+      newSystemIds,
+      systemsToRemove,
+      systemsToAdd,
+      systemsToUpdate,
+    });
+
+    // Step 1: Delete permissions for removed systems
+    if (systemsToRemove.length > 0) {
+      const deletePromises = selectedPermission.value.systems
+        .filter((s) => systemsToRemove.includes(parseInt(s.system_id, 10)))
+        .map((s) =>
+          apiClient.delete(`/permissions/${s.id}`).catch((err) => {
+            console.error(
+              `Error deleting permission for system ${s.system_id}:`,
+              err
+            );
+            return Promise.reject(err);
+          })
+        );
+
+      await Promise.all(deletePromises);
+      console.log(`Deleted ${systemsToRemove.length} permission(s)`);
     }
 
+    // Step 2: Create permissions for newly added systems
+    if (systemsToAdd.length > 0) {
+      const newPermissions = systemsToAdd.map((systemId) => ({
+        system_id: systemId,
+        date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
+      }));
+
+      const createResponse = await apiClient.post("/permissions", {
+        user_id: selectedPermission.value.user_id,
+        permissions: newPermissions,
+      });
+
+      if (!createResponse.data?.success) {
+        throw new Error("Failed to create new permissions");
+      }
+      console.log(`Created ${systemsToAdd.length} permission(s)`);
+    }
+
+    // Step 3: Update expiry date for remaining permissions
+    if (systemsToUpdate.length > 0) {
+      const updateResponse = await apiClient.put("/permissions", {
+        ids: systemsToUpdate,
+        date_time_expiry: formData.value.date_time_expiry + " 23:59:59",
+      });
+
+      if (!updateResponse.data?.success) {
+        throw new Error("Failed to update permissions");
+      }
+      console.log(`Updated ${systemsToUpdate.length} permission(s)`);
+    }
+
+    success(
+      `✓ Removed ${systemsToRemove.length}, Added ${systemsToAdd.length}, Updated ${systemsToUpdate.length}`
+    );
     await loadPermissions();
 
     setTimeout(() => {
@@ -718,20 +806,7 @@ const nextPage = () => {
                 <td class="px-4 sm:px-6 py-4 text-right">
                   <div class="flex items-center justify-end gap-1 sm:gap-2">
                     <button
-                      @click="
-                        () => {
-                          selectedPermission = {
-                            user_id: group.user_id,
-                            system_ids: group.systems.map((s) => s.system_id),
-                          };
-                          formData.system_ids = group.systems.map(
-                            (s) => s.system_id
-                          );
-                          formData.date_time_expiry =
-                            group.systems[0].date_time_expiry;
-                          showEditModal = true;
-                        }
-                      "
+                      @click="openEditGroupModal(group)"
                       class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                     >
                       <Edit2 class="h-4 w-4" />
