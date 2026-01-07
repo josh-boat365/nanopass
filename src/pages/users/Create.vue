@@ -1,13 +1,25 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
-import { Trash2, Edit2, Plus, Eye, EyeOff, Loader2, ChevronLeft, ChevronRight } from "lucide-vue-next";
+import {
+  Trash2,
+  Edit2,
+  Plus,
+  Eye,
+  EyeOff,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-vue-next";
 import BaseLayout from "@/layouts/AppLayout.vue";
 import { storeToRefs } from "pinia";
 import { useUserStore } from "@/stores/useUserStore";
+import { useDepartmentStore } from "@/stores/useDepartmentStore";
 import { useToast } from "@/composables/useToast";
 
 const userStore = useUserStore();
+const departmentStore = useDepartmentStore();
 const { user, users, loading, error } = storeToRefs(userStore);
+const { departments } = storeToRefs(departmentStore);
 const { success, error: showError } = useToast();
 
 // State management
@@ -36,6 +48,7 @@ const formData = ref({
 // Load users on component mount
 onMounted(async () => {
   await loadUsers();
+  await loadDepartments();
 });
 
 // Load all users
@@ -52,6 +65,15 @@ const loadUsers = async () => {
     } else {
       showError("Failed to load users. Please try again later.");
     }
+  }
+};
+
+// Load all departments
+const loadDepartments = async () => {
+  try {
+    await departmentStore.getAllDepartments();
+  } catch (err) {
+    console.error("Error loading departments:", err);
   }
 };
 
@@ -83,7 +105,10 @@ const paginatedUsers = computed(() => {
 // Computed: Pagination info
 const paginationInfo = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value + 1;
-  const end = Math.min(currentPage.value * itemsPerPage.value, filteredUsers.value.length);
+  const end = Math.min(
+    currentPage.value * itemsPerPage.value,
+    filteredUsers.value.length
+  );
   return `${start}-${end} of ${filteredUsers.value.length}`;
 });
 
@@ -154,7 +179,7 @@ const closeAddModal = () => {
 const openEditModal = async (userToEdit) => {
   try {
     const userData = await userStore.getUserById(userToEdit.id);
-    
+
     selectedUser.value = userData;
     formData.value = {
       username: userData.username || "",
@@ -215,7 +240,10 @@ const validateForm = () => {
   if (!showEditModal.value && !formData.value.password.trim()) {
     return "Password is required";
   }
-  if (formData.value.password && formData.value.password !== formData.value.password_confirmation) {
+  if (
+    formData.value.password &&
+    formData.value.password !== formData.value.password_confirmation
+  ) {
     return "Passwords do not match";
   }
   if (formData.value.password && formData.value.password.length < 6) {
@@ -248,7 +276,7 @@ const addUser = async () => {
     await userStore.createUser(userData);
     success("User created successfully!");
     await loadUsers();
-    
+
     setTimeout(() => {
       closeAddModal();
     }, 1500);
@@ -288,7 +316,7 @@ const updateUser = async () => {
     await userStore.updateUser(selectedUser.value.id, userData);
     success("User updated successfully!");
     await loadUsers();
-    
+
     setTimeout(() => {
       closeEditModal();
     }, 1500);
@@ -309,7 +337,7 @@ const deleteUser = async () => {
 
     await userStore.deleteUser(selectedUser.value.id);
     success("User deleted successfully!");
-    
+
     setTimeout(() => {
       closeDeleteModal();
     }, 1000);
@@ -328,7 +356,7 @@ const maskPassword = (password) => {
 // Get privilege badge color
 const getPrivilegeBadgeColor = (privilege) => {
   if (!privilege) return "bg-gray-100 text-gray-800";
-  
+
   const privilegeLower = privilege.toLowerCase();
   if (privilegeLower === "admin") return "bg-red-100 text-red-800";
   if (privilegeLower === "editor") return "bg-yellow-100 text-yellow-800";
@@ -338,6 +366,13 @@ const getPrivilegeBadgeColor = (privilege) => {
 // Get user display name
 const getUserDisplayName = (user) => {
   return user.username || user.email;
+};
+
+// Get department name by ID
+const getDepartmentName = (departmentId) => {
+  if (!departmentId) return null;
+  const dept = departments.value.find((d) => d.id === departmentId);
+  return dept ? dept.department_name : null;
 };
 </script>
 
@@ -426,6 +461,11 @@ const getUserDisplayName = (user) => {
                 <th
                   class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
                 >
+                  Department
+                </th>
+                <th
+                  class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                >
                   Role
                 </th>
                 <th
@@ -456,9 +496,22 @@ const getUserDisplayName = (user) => {
                 </td>
                 <td class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm">
                   <span
+                    v-if="getDepartmentName(user.department_id)"
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                  >
+                    {{ getDepartmentName(user.department_id) }}
+                  </span>
+                  <span v-else class="text-gray-400 text-xs"
+                    >No department</span
+                  >
+                </td>
+                <td class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm">
+                  <span
                     :class="[
                       'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                      user.admin ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800',
+                      user.admin
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-green-100 text-green-800',
                     ]"
                   >
                     {{ user.admin ? "Admin" : "User" }}
@@ -488,8 +541,13 @@ const getUserDisplayName = (user) => {
         </div>
 
         <!-- Pagination -->
-        <div v-if="totalPages > 1" class="border-t px-4 sm:px-6 py-4 bg-gray-50">
-          <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div
+          v-if="totalPages > 1"
+          class="border-t px-4 sm:px-6 py-4 bg-gray-50"
+        >
+          <div
+            class="flex flex-col sm:flex-row items-center justify-between gap-4"
+          >
             <div class="flex items-center gap-2 text-sm text-gray-600">
               <span>Show</span>
               <select
@@ -497,7 +555,11 @@ const getUserDisplayName = (user) => {
                 @change="handleItemsPerPageChange(Number($event.target.value))"
                 class="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black"
               >
-                <option v-for="option in itemsPerPageOptions" :key="option" :value="option">
+                <option
+                  v-for="option in itemsPerPageOptions"
+                  :key="option"
+                  :value="option"
+                >
                   {{ option }}
                 </option>
               </select>
@@ -516,7 +578,7 @@ const getUserDisplayName = (user) => {
                   'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                   currentPage === 1
                     ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                    : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                    : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
                 ]"
               >
                 <ChevronLeft class="h-4 w-4" />
@@ -526,19 +588,25 @@ const getUserDisplayName = (user) => {
               <div class="flex items-center gap-1">
                 <template v-for="page in totalPages" :key="page">
                   <button
-                    v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
+                    v-if="
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    "
                     @click="goToPage(page)"
                     :class="[
                       'px-3 py-2 text-sm font-medium rounded-md transition-colors',
                       page === currentPage
                         ? 'bg-black text-white'
-                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
                     ]"
                   >
                     {{ page }}
                   </button>
                   <span
-                    v-else-if="page === currentPage - 2 || page === currentPage + 2"
+                    v-else-if="
+                      page === currentPage - 2 || page === currentPage + 2
+                    "
                     class="px-2 text-gray-500"
                   >
                     ...
@@ -553,7 +621,7 @@ const getUserDisplayName = (user) => {
                   'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                   currentPage === totalPages
                     ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                    : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                    : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
                 ]"
               >
                 <span class="hidden sm:inline mr-1">Next</span>
@@ -669,6 +737,27 @@ const getUserDisplayName = (user) => {
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
+          </div>
+          <div>
+            <label
+              for="add-department"
+              class="block text-sm font-medium text-gray-900 mb-1"
+              >Department</label
+            >
+            <select
+              id="add-department"
+              v-model="formData.department_id"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            >
+              <option :value="null">Select a department</option>
+              <option
+                v-for="dept in departments"
+                :key="dept.id"
+                :value="dept.id"
+              >
+                {{ dept.department_name }}
+              </option>
+            </select>
           </div>
           <div class="flex items-center">
             <input
@@ -793,6 +882,27 @@ const getUserDisplayName = (user) => {
               placeholder="Re-enter new password"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
+          </div>
+          <div>
+            <label
+              for="edit-department"
+              class="block text-sm font-medium text-gray-900 mb-1"
+              >Department</label
+            >
+            <select
+              id="edit-department"
+              v-model="formData.department_id"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            >
+              <option :value="null">Select a department</option>
+              <option
+                v-for="dept in departments"
+                :key="dept.id"
+                :value="dept.id"
+              >
+                {{ dept.department_name }}
+              </option>
+            </select>
           </div>
           <div class="flex items-center">
             <input
