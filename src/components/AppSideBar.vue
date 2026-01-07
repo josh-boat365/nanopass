@@ -46,11 +46,6 @@ const allNavMain = [
         url: "/user/dashboard",
         roles: ["user"],
       },
-      //   {
-      //     title: "My Dashboard2",
-      //     url: "/user/dashboard2",
-      //     roles: ["user", "admin"],
-      //   },
       {
         title: "Assigned Keys",
         url: "/user/assigned-keys",
@@ -77,6 +72,10 @@ const allNavMain = [
       {
         title: "Users",
         url: "/admin/dashboard/create-user",
+      },
+      {
+        title: "Departments",
+        url: "/admin/dashboard/departments",
       },
       {
         title: "Assign Keys to Users",
