@@ -303,34 +303,37 @@ const handleVerifyPassword = async () => {
 
         // Use proper password access endpoint that handles permissions, brute-force protection, and audit logging
         // This endpoint automatically logs the reveal action with REVEAL access type
+        // Note: We don't send password_id since permissions are system-level, not password-specific
         const accessResponse = await apiClient.post("/passwords/access", {
           user_id: currentUser.id,
           system_id: systemId,
-          password_id: selectedPassword.value.id, // Password ID if accessing specific password
         });
 
         // Extract password data from proper endpoint response
         const passwordData = accessResponse.data?.data || {};
 
+        // Handle both single password and multiple passwords responses
+        const password = passwordData.password || passwordData.passwords?.[0];
+
+        if (!password) {
+          passwordError.value = "No passwords found for this system.";
+          return;
+        }
+
         // Build the revealed password object with data from /passwords/access endpoint
         // The backend endpoint already handles audit logging for the reveal action
         revealedPassword.value = {
           ...selectedPassword.value,
-          title:
-            passwordData.password?.title || passwordData.title || "Unknown",
-          username:
-            passwordData.password?.username ||
-            passwordData.username ||
-            "Unknown",
+          id: password.id,
+          title: password.title || "Unknown",
+          username: password.username || "Unknown",
           password:
-            passwordData.password?.encrypted_password ||
-            passwordData.password?.password ||
+            password.encrypted_password ||
+            password.password ||
             "Unable to retrieve password",
-          notes: passwordData.password?.notes || passwordData.notes || "N/A",
+          notes: password.notes || "N/A",
           is_active:
-            passwordData.password?.is_active !== undefined
-              ? passwordData.password?.is_active
-              : true,
+            password.is_active !== undefined ? password.is_active : true,
         };
 
         console.log(
@@ -382,18 +385,30 @@ const handleCopyPassword = async () => {
 
     // Log the copy event
     try {
-      await apiClient.post("audit-trails/log-key-copied", {
+      console.log("📤 Sending copy log request with data:", {
         key_type: "assigned",
-        key_id: selectedPassword.value.password_id,
-        key_name:
-          selectedPassword.value.title || selectedPassword.value.password_name,
+        key_id: revealedPassword.value.id,
+        key_name: revealedPassword.value.title || "Unknown",
         system_id: selectedPassword.value.system_id,
         system_name: getSystemName(selectedPassword.value.system_id),
-        access_type: "copied", // Specify that this is a copy action
       });
-      console.log("✅ Copy event logged");
+
+      const logResponse = await apiClient.post("audit-trails/log-key-copied", {
+        key_type: "assigned",
+        key_id: revealedPassword.value.id, // Use the actual password ID from revealed password
+        key_name: revealedPassword.value.title || "Unknown",
+        system_id: selectedPassword.value.system_id,
+        system_name: getSystemName(selectedPassword.value.system_id),
+      });
+
+      console.log("✅ Copy event logged successfully:", logResponse.data);
     } catch (logErr) {
-      console.warn("Failed to log copy event:", logErr);
+      console.error("❌ Failed to log copy event - Error details:", {
+        message: logErr.message,
+        status: logErr.response?.status,
+        data: logErr.response?.data,
+        fullError: logErr,
+      });
       // Don't fail the copy operation if logging fails
     }
 
