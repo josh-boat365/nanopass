@@ -98,6 +98,164 @@ const uniqueCategories = computed(() => {
   return Array.from(categories).sort();
 });
 
+// ========================================
+// DETAILED ANALYTICS COMPUTED PROPERTIES
+// ========================================
+
+// Last 24 hours activity
+const last24HoursCount = computed(() => {
+  const now = new Date();
+  return auditTrails.value.filter((t) => {
+    const date = new Date(t.created_at);
+    return (now - date) / (1000 * 60 * 60) <= 24;
+  }).length;
+});
+
+// Last 7 days activity
+const last7DaysCount = computed(() => {
+  const now = new Date();
+  return auditTrails.value.filter((t) => {
+    const date = new Date(t.created_at);
+    return (now - date) / (1000 * 60 * 60 * 24) <= 7;
+  }).length;
+});
+
+// Activity breakdown by category
+const activityByCategory = computed(() => {
+  const breakdown = {};
+  auditTrails.value.forEach((trail) => {
+    const category = trail.action_category || "OTHER";
+    breakdown[category] = (breakdown[category] || 0) + 1;
+  });
+  return breakdown;
+});
+
+// Activity breakdown by action type
+const activityByActionType = computed(() => {
+  const breakdown = {};
+  auditTrails.value.forEach((trail) => {
+    const action = trail.action_type || trail.action || "UNKNOWN";
+    breakdown[action] = (breakdown[action] || 0) + 1;
+  });
+  return breakdown;
+});
+
+// Success vs Failed breakdown
+const successFailureStats = computed(() => {
+  const stats = {
+    SUCCESS: 0,
+    FAILED: 0,
+    PENDING: 0,
+    UNKNOWN: 0,
+  };
+  auditTrails.value.forEach((trail) => {
+    const status = trail.status || "UNKNOWN";
+    if (status in stats) {
+      stats[status]++;
+    } else {
+      stats.UNKNOWN++;
+    }
+  });
+  return stats;
+});
+
+// Top 5 most active users
+const topActiveUsers = computed(() => {
+  const userActivity = {};
+  auditTrails.value.forEach((trail) => {
+    const username = trail.user?.username || "Unknown";
+    userActivity[username] = (userActivity[username] || 0) + 1;
+  });
+  return Object.entries(userActivity)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([username, count]) => ({ username, count }));
+});
+
+// Critical security events (failed attempts, deletions, admin changes)
+const securityEvents = computed(() => {
+  return auditTrails.value.filter((t) => {
+    const action = t.action?.toUpperCase() || "";
+    const status = t.status || "";
+    return (
+      action.includes("DELETE") ||
+      action.includes("ADMIN") ||
+      status === "FAILED" ||
+      action.includes("REVOKE") ||
+      action.includes("PERMISSION")
+    );
+  }).length;
+});
+
+// Password access events (reveals and copies)
+const passwordAccessEvents = computed(() => {
+  return auditTrails.value.filter((t) => {
+    const action = t.action?.toUpperCase() || "";
+    return (
+      action.includes("PASSWORD") &&
+      (action.includes("REVEAL") || action.includes("COPY"))
+    );
+  }).length;
+});
+
+// System changes (creates, updates, deletes)
+const systemChanges = computed(() => {
+  return auditTrails.value.filter((t) => {
+    const action = t.action?.toUpperCase() || "";
+    return (
+      action.includes("CREATE") ||
+      action.includes("UPDATE") ||
+      action.includes("DELETE")
+    );
+  }).length;
+});
+
+// Most accessed systems
+const mostAccessedSystems = computed(() => {
+  const systemAccess = {};
+  auditTrails.value.forEach((trail) => {
+    const systemName =
+      trail.new_values?.system_name ||
+      trail.old_values?.system_name ||
+      trail.description;
+    if (systemName) {
+      systemAccess[systemName] = (systemAccess[systemName] || 0) + 1;
+    }
+  });
+  return Object.entries(systemAccess)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([systemName, count]) => ({ systemName, count }));
+});
+
+// Failed operations count
+const failedOperationsCount = computed(() => {
+  return auditTrails.value.filter((t) => t.status === "FAILED").length;
+});
+
+// Success rate percentage
+const successRatePercentage = computed(() => {
+  if (auditTrails.value.length === 0) return 0;
+  const successful = auditTrails.value.filter(
+    (t) => t.status === "SUCCESS"
+  ).length;
+  return Math.round((successful / auditTrails.value.length) * 100);
+});
+
+// Current selection month/year
+const currentMonthCount = computed(() => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  return auditTrails.value.filter((t) => {
+    const date = new Date(t.created_at);
+    return (
+      date.getFullYear() === currentYear && date.getMonth() === currentMonth
+    );
+  }).length;
+});
+
 // Color mappings for categories
 const categoryColors = {
   USER: "bg-blue-100 text-blue-800",
@@ -588,35 +746,269 @@ onMounted(() => {
         </div>
 
         <!-- Summary Cards -->
-        <div class="grid gap-4 md:grid-cols-3 mb-8">
-          <div class="rounded-lg border bg-white p-6 shadow-sm">
-            <p class="text-sm text-gray-600">Total Activities</p>
-            <p class="mt-2 text-3xl font-bold text-gray-900">
-              {{ auditTrails.length }}
-            </p>
-            <p class="mt-1 text-xs text-gray-500">All recorded events</p>
+        <div class="space-y-6 mb-8">
+          <!-- Primary Stats Row -->
+          <div class="grid gap-4 md:grid-cols-4">
+            <!-- Total Activities Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-gray-600">
+                    Total Activities
+                  </p>
+                  <p class="mt-2 text-3xl font-bold text-gray-900">
+                    {{ auditTrails.length }}
+                  </p>
+                  <p class="mt-2 text-xs text-gray-500">
+                    {{ currentMonthCount }} this month
+                  </p>
+                </div>
+                <div class="text-4xl opacity-10">📊</div>
+              </div>
+            </div>
+
+            <!-- Success Rate Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-gray-600">Success Rate</p>
+                  <p class="mt-2 text-3xl font-bold text-green-600">
+                    {{ successRatePercentage }}%
+                  </p>
+                  <p class="mt-2 text-xs text-gray-500">
+                    {{ successFailureStats.SUCCESS }} successful operations
+                  </p>
+                </div>
+                <div class="text-4xl opacity-10">✅</div>
+              </div>
+            </div>
+
+            <!-- Recent Activity Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-gray-600">Last 24 Hours</p>
+                  <p class="mt-2 text-3xl font-bold text-blue-600">
+                    {{ last24HoursCount }}
+                  </p>
+                  <p class="mt-2 text-xs text-gray-500">
+                    {{ last7DaysCount }} in last 7 days
+                  </p>
+                </div>
+                <div class="text-4xl opacity-10">⏰</div>
+              </div>
+            </div>
+
+            <!-- Security Events Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+              :class="securityEvents > 0 ? 'bg-red-50' : ''"
+            >
+              <div class="flex items-center justify-between">
+                <div>
+                  <p
+                    class="text-sm font-medium"
+                    :class="
+                      securityEvents > 0 ? 'text-red-700' : 'text-gray-600'
+                    "
+                  >
+                    Security Events
+                  </p>
+                  <p
+                    class="mt-2 text-3xl font-bold"
+                    :class="
+                      securityEvents > 0 ? 'text-red-600' : 'text-gray-900'
+                    "
+                  >
+                    {{ securityEvents }}
+                  </p>
+                  <p
+                    class="mt-2 text-xs"
+                    :class="
+                      securityEvents > 0 ? 'text-red-600' : 'text-gray-500'
+                    "
+                  >
+                    {{ failedOperationsCount }} failed operations
+                  </p>
+                </div>
+                <div class="text-4xl opacity-10">🔒</div>
+              </div>
+            </div>
           </div>
 
-          <div class="rounded-lg border bg-white p-6 shadow-sm">
-            <p class="text-sm text-gray-600">Recent 24 Hours</p>
-            <p class="mt-2 text-3xl font-bold text-blue-600">
-              {{
-                auditTrails.filter((t) => {
-                  const date = new Date(t.created_at);
-                  const now = new Date();
-                  return (now - date) / (1000 * 60 * 60) <= 24;
-                }).length
-              }}
-            </p>
-            <p class="mt-1 text-xs text-gray-500">Last day activities</p>
+          <!-- Secondary Stats Row -->
+          <div class="grid gap-4 md:grid-cols-3">
+            <!-- Password Access Events Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-medium text-gray-700">
+                  Password Access
+                </h3>
+                <div class="text-3xl opacity-20">🔑</div>
+              </div>
+              <p class="text-2xl font-bold text-purple-600">
+                {{ passwordAccessEvents }}
+              </p>
+              <p class="mt-2 text-xs text-gray-500">Reveals & Copies</p>
+              <div class="mt-3 pt-3 border-t border-gray-200 space-y-1">
+                <p class="text-xs text-gray-600">Categories:</p>
+                <div class="flex flex-wrap gap-1">
+                  <span
+                    v-if="activityByCategory.PASSWORD"
+                    class="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded"
+                  >
+                    PASSWORD ({{ activityByCategory.PASSWORD }})
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Top Users Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-medium text-gray-700">
+                  Most Active Users
+                </h3>
+                <div class="text-3xl opacity-20">👥</div>
+              </div>
+              <div class="space-y-2">
+                <div
+                  v-for="(user, idx) in topActiveUsers"
+                  :key="idx"
+                  class="flex items-center justify-between text-sm"
+                >
+                  <span class="text-gray-700 truncate">{{
+                    user.username
+                  }}</span>
+                  <span class="font-bold text-gray-900 ml-2">{{
+                    user.count
+                  }}</span>
+                </div>
+                <p
+                  v-if="topActiveUsers.length === 0"
+                  class="text-xs text-gray-500 italic"
+                >
+                  No users yet
+                </p>
+              </div>
+            </div>
+
+            <!-- System Changes Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-medium text-gray-700">
+                  System Changes
+                </h3>
+                <div class="text-3xl opacity-20">⚙️</div>
+              </div>
+              <p class="text-2xl font-bold text-indigo-600">
+                {{ systemChanges }}
+              </p>
+              <p class="mt-2 text-xs text-gray-500">Create, Update, Delete</p>
+              <div class="mt-3 pt-3 border-t border-gray-200">
+                <p class="text-xs text-gray-600 mb-1">Breakdown:</p>
+                <div class="space-y-1 text-xs">
+                  <div class="flex justify-between">
+                    <span>Creates:</span>
+                    <span class="font-semibold">{{
+                      activityByActionType.CREATE || 0
+                    }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>Updates:</span>
+                    <span class="font-semibold">{{
+                      activityByActionType.UPDATE || 0
+                    }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>Deletes:</span>
+                    <span class="font-semibold text-red-600">{{
+                      activityByActionType.DELETE || 0
+                    }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="rounded-lg border bg-white p-6 shadow-sm">
-            <p class="text-sm text-gray-600">Filtered Results</p>
-            <p class="mt-2 text-3xl font-bold text-purple-600">
-              {{ filteredTrails.length }}
-            </p>
-            <p class="mt-1 text-xs text-gray-500">Current filter results</p>
+          <!-- Tertiary Stats Row -->
+          <div class="grid gap-4 md:grid-cols-2">
+            <!-- Most Accessed Systems Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-medium text-gray-700">
+                  Most Accessed Systems
+                </h3>
+                <div class="text-3xl opacity-20">🌐</div>
+              </div>
+              <div class="space-y-3">
+                <div
+                  v-for="(system, idx) in mostAccessedSystems"
+                  :key="idx"
+                  class="flex items-center justify-between"
+                >
+                  <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-900 truncate">
+                      {{ system.systemName }}
+                    </p>
+                  </div>
+                  <div
+                    class="ml-3 bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full"
+                  >
+                    {{ system.count }}
+                  </div>
+                </div>
+                <p
+                  v-if="mostAccessedSystems.length === 0"
+                  class="text-xs text-gray-500 italic"
+                >
+                  No system access yet
+                </p>
+              </div>
+            </div>
+
+            <!-- Category Breakdown Card -->
+            <div
+              class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-medium text-gray-700">
+                  Activity by Category
+                </h3>
+                <div class="text-3xl opacity-20">📂</div>
+              </div>
+              <div class="space-y-2">
+                <div
+                  v-for="(count, category) in activityByCategory"
+                  :key="category"
+                  class="flex items-center justify-between"
+                >
+                  <div class="flex items-center gap-2">
+                    <span
+                      :class="getCategoryColor(category)"
+                      class="inline-block text-xs font-semibold px-2 py-1 rounded"
+                    >
+                      {{ category }}
+                    </span>
+                  </div>
+                  <span class="font-bold text-gray-900">{{ count }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
