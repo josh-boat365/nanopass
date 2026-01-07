@@ -13,12 +13,12 @@ import UserPersonalKeys from "@/pages/dashboard/user/PersonalKeys.vue";
 import AuditTrails from "@/pages/dashboard/AuditTrails.vue";
 import Settings from "@/pages/dashboard/Settings.vue";
 import CreateUser from "@/pages/users/Create.vue";
-// import CreatePrivileges from "@/pages/privileges/Index.vue";
 import CreateSystemPasswordPolicy from "@/pages/system-setup/CreateSystemPasswordPolicy.vue";
 import CreateSystemCategory from "@/pages/system-setup/CreateSystemCategory.vue";
 import CreateSystem from "@/pages/system-setup/CreateSystem.vue";
 import CreateSystemPassword from "../pages/system-setup/CreateSystemPassword.vue";
 import AssignSystemsToUser from "../pages/system-setup/AssignSystemsToUser.vue";
+import Departments from "@/pages/dashboard/Departments.vue";
 import NotFound from "@/pages/errors/NotFound.vue";
 import ServerError from "@/pages/errors/ServerError.vue";
 
@@ -143,6 +143,14 @@ const routes = [{
 {
   path: "/admin/dashboard/assign-systems-to-users",
   component: AssignSystemsToUser,
+  meta: {
+    requiresAuth: true,
+    role: ['admin']
+  }
+},
+{
+  path: "/admin/dashboard/departments",
+  component: Departments,
   meta: {
     requiresAuth: true,
     role: ['admin']
