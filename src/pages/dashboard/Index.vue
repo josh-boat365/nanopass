@@ -34,6 +34,113 @@ const passwordExpirations = ref([]);
 const systemAccessOverview = ref([]);
 const passwordPolicies = ref([]);
 const loading = ref(true);
+const auditTrails = ref([]);
+
+// ========================================
+// COMPUTED PROPERTIES FOR ANALYTICS
+// ========================================
+
+// Admin vs Regular Users count
+const adminUsersCount = computed(() => {
+  return recentUsers.value.filter((u) => u && u.admin).length;
+});
+
+const regularUsersCount = computed(() => {
+  return recentUsers.value.filter((u) => u && !u.admin).length;
+});
+
+// Critical security issues
+const criticalSecurityIssues = computed(() => {
+  let issues = 0;
+  // Count expired passwords
+  issues += passwordExpirations.value.filter(
+    (p) => p.status === "critical"
+  ).length;
+  return issues;
+});
+
+// User activity status
+const inactiveUsersCount = computed(() => {
+  return recentUsers.value.filter((u) => u && u.status !== "active").length;
+});
+
+// Permission statistics
+const totalPermissionsGranted = computed(() => {
+  return recentUsers.value.reduce(
+    (sum, user) => sum + (user.permissions_count || 0),
+    0
+  );
+});
+
+// Average passwords per system
+const avgPasswordsPerSystem = computed(() => {
+  if (systemAccessOverview.value.length === 0) return 0;
+  const total = systemAccessOverview.value.reduce(
+    (sum, sys) => sum + (sys.password_count || 0),
+    0
+  );
+  return Math.round(total / systemAccessOverview.value.length);
+});
+
+// Password expiration breakdown
+const passwordExpirationStats = computed(() => {
+  return {
+    critical: passwordExpirations.value.filter((p) => p.status === "critical")
+      .length,
+    warning: passwordExpirations.value.filter((p) => p.status === "warning")
+      .length,
+    info: passwordExpirations.value.filter((p) => p.status === "info").length,
+    total: passwordExpirations.value.length,
+  };
+});
+
+// System health status
+const systemHealthStatus = computed(() => {
+  const healthyCount = systemAccessOverview.value.filter(
+    (s) => s.status === "healthy"
+  ).length;
+  const total = systemAccessOverview.value.length;
+  return {
+    healthy: healthyCount,
+    total: total,
+    percentage: total > 0 ? Math.round((healthyCount / total) * 100) : 0,
+  };
+});
+
+// User compliance percentage (users with active permissions)
+const userCompliancePercentage = computed(() => {
+  if (recentUsers.value.length === 0) return 0;
+  const usersWithPermissions = recentUsers.value.filter(
+    (u) => u && u.permissions_count && u.permissions_count > 0
+  ).length;
+  return Math.round((usersWithPermissions / recentUsers.value.length) * 100);
+});
+
+// Policy compliance average
+const avgPolicyCompliance = computed(() => {
+  if (passwordPolicies.value.length === 0) return 0;
+  const total = passwordPolicies.value.reduce(
+    (sum, p) => sum + (p.compliance || 0),
+    0
+  );
+  return Math.round(total / passwordPolicies.value.length);
+});
+
+// Most accessed system
+const mostAccessedSystem = computed(() => {
+  if (systemAccessOverview.value.length === 0) return null;
+  return systemAccessOverview.value.reduce((max, sys) =>
+    (sys.activeUsers || 0) > (max.activeUsers || 0) ? sys : max
+  );
+});
+
+// Least accessed system
+const leastAccessedSystem = computed(() => {
+  if (systemAccessOverview.value.length === 0) return null;
+  return systemAccessOverview.value.reduce((min, sys) =>
+    (sys.activeUsers || 0) < (min.activeUsers || 0) ? sys : min
+  );
+});
 
 // Fetch all dashboard data
 const fetchDashboardData = async () => {
@@ -207,74 +314,345 @@ onMounted(() => {
 
       <!-- Dashboard Content -->
       <template v-else>
-        <!-- Key Metrics Cards -->
+        <!-- Primary Key Metrics Cards (4 columns) -->
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
           <!-- Total Users Card -->
-          <div class="rounded-lg border bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm text-gray-600">Total Users</p>
-                <p class="mt-2 text-3xl font-bold text-gray-900">
-                  {{ systemMetrics.totalUsers }}
-                </p>
-                <p class="mt-1 text-xs text-green-600">
-                  {{ systemMetrics.activeUsers }} active
-                </p>
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-medium text-gray-600">Total Users</h3>
+              <div class="text-3xl opacity-20">👥</div>
+            </div>
+            <p class="text-3xl font-bold text-gray-900">
+              {{ systemMetrics.totalUsers }}
+            </p>
+            <div class="mt-3 pt-3 border-t border-gray-200 space-y-1 text-xs">
+              <div class="flex justify-between">
+                <span class="text-gray-600">Admins:</span>
+                <span class="font-semibold text-orange-600">{{
+                  adminUsersCount
+                }}</span>
               </div>
-              <div class="rounded-lg bg-blue-100 p-3">
-                <Users class="h-6 w-6 text-blue-600" />
+              <div class="flex justify-between">
+                <span class="text-gray-600">Regular Users:</span>
+                <span class="font-semibold text-blue-600">{{
+                  regularUsersCount
+                }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">Inactive:</span>
+                <span class="font-semibold text-gray-600">{{
+                  inactiveUsersCount
+                }}</span>
               </div>
             </div>
           </div>
 
-          <!-- Expired Passwords Card -->
-          <div class="rounded-lg border bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm text-gray-600">Expired Passwords</p>
-                <p class="mt-2 text-3xl font-bold text-red-600">
-                  {{ systemMetrics.expiredPasswords }}
-                </p>
-                <p class="mt-1 text-xs text-red-600">
-                  Require immediate action
-                </p>
-              </div>
-              <div class="rounded-lg bg-red-100 p-3">
-                <AlertCircle class="h-6 w-6 text-red-600" />
-              </div>
+          <!-- Expired Passwords Card (Critical Alert) -->
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+            :class="criticalSecurityIssues > 0 ? 'bg-red-50' : ''"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3
+                class="text-sm font-medium"
+                :class="
+                  criticalSecurityIssues > 0 ? 'text-red-700' : 'text-gray-600'
+                "
+              >
+                Expired Passwords
+              </h3>
+              <div class="text-3xl opacity-20">🚨</div>
+            </div>
+            <p
+              class="text-3xl font-bold"
+              :class="
+                criticalSecurityIssues > 0 ? 'text-red-600' : 'text-gray-900'
+              "
+            >
+              {{ systemMetrics.expiredPasswords }}
+            </p>
+            <div
+              class="mt-3 pt-3 border-t"
+              :class="
+                criticalSecurityIssues > 0
+                  ? 'border-red-200'
+                  : 'border-gray-200'
+              "
+            >
+              <p
+                class="text-xs"
+                :class="
+                  criticalSecurityIssues > 0 ? 'text-red-600' : 'text-gray-500'
+                "
+              >
+                Requires immediate action
+              </p>
             </div>
           </div>
 
           <!-- Expiring Soon Card -->
-          <div class="rounded-lg border bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm text-gray-600">
-                  Expiring in {{ systemMetrics.expiringInDays }} Days
-                </p>
-                <p class="mt-2 text-3xl font-bold text-yellow-600">
-                  {{ passwordExpirations.length }}
-                </p>
-                <p class="mt-1 text-xs text-yellow-600">
-                  Proactive notification
-                </p>
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-medium text-gray-600">Expiring Soon</h3>
+              <div class="text-3xl opacity-20">⏰</div>
+            </div>
+            <p class="text-3xl font-bold text-yellow-600">
+              {{ passwordExpirationStats.warning }}
+            </p>
+            <div class="mt-3 pt-3 border-t border-gray-200 space-y-1 text-xs">
+              <div class="flex justify-between">
+                <span class="text-gray-600">Within 7 days:</span>
+                <span class="font-semibold">{{
+                  passwordExpirationStats.warning
+                }}</span>
               </div>
-              <div class="rounded-lg bg-yellow-100 p-3">
-                <Clock class="h-6 w-6 text-yellow-600" />
+              <div class="flex justify-between">
+                <span class="text-gray-600">Informational:</span>
+                <span class="font-semibold">{{
+                  passwordExpirationStats.info
+                }}</span>
               </div>
             </div>
           </div>
 
-          <!-- Systems Health Card -->
-          <div class="rounded-lg border bg-white p-6 shadow-sm">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm text-gray-600">Systems Health</p>
-                <p class="mt-2 text-3xl font-bold text-green-600">3/3</p>
-                <p class="mt-1 text-xs text-green-600">All systems healthy</p>
+          <!-- System Health Card -->
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-medium text-gray-600">System Health</h3>
+              <div class="text-3xl opacity-20">💚</div>
+            </div>
+            <p class="text-3xl font-bold text-green-600">
+              {{ systemHealthStatus.healthy }}/{{ systemHealthStatus.total }}
+            </p>
+            <div class="mt-3 pt-3 border-t border-gray-200">
+              <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                <div
+                  class="bg-green-500 h-full"
+                  :style="{
+                    width: systemHealthStatus.percentage + '%',
+                  }"
+                ></div>
               </div>
-              <div class="rounded-lg bg-green-100 p-3">
-                <CheckCircle class="h-6 w-6 text-green-600" />
+              <p class="text-xs text-green-600 mt-2">
+                {{ systemHealthStatus.percentage }}% healthy
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Secondary Analytics Cards (3 columns) -->
+        <div class="grid gap-4 md:grid-cols-3 mb-8">
+          <!-- Security Status Card -->
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-medium text-gray-700">Security Status</h3>
+              <div class="text-3xl opacity-20">🔒</div>
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">Security Issues:</span>
+                <span
+                  class="font-bold px-2 py-1 rounded text-xs"
+                  :class="
+                    criticalSecurityIssues > 0
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-green-100 text-green-800'
+                  "
+                >
+                  {{ criticalSecurityIssues }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">Inactive Users:</span>
+                <span class="font-bold text-gray-900">{{
+                  inactiveUsersCount
+                }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">Policy Compliance:</span>
+                <span class="font-bold text-green-600"
+                  >{{ avgPolicyCompliance }}%</span
+                >
+              </div>
+              <div class="pt-3 border-t border-gray-200">
+                <p class="text-xs text-gray-500">
+                  User Compliance:
+                  <span class="font-bold text-gray-900"
+                    >{{ userCompliancePercentage }}%</span
+                  >
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Access & Permissions Card -->
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-medium text-gray-700">Access Control</h3>
+              <div class="text-3xl opacity-20">🔑</div>
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">Total Permissions:</span>
+                <span class="font-bold text-blue-600">{{
+                  totalPermissionsGranted
+                }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">Active Systems:</span>
+                <span class="font-bold text-purple-600">{{
+                  systemAccessOverview.length
+                }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">Avg Passwords:</span>
+                <span class="font-bold text-green-600">{{
+                  avgPasswordsPerSystem
+                }}</span>
+              </div>
+              <div class="pt-3 border-t border-gray-200">
+                <p class="text-xs text-gray-600">
+                  Most Accessed:
+                  <span class="font-bold text-gray-900">{{
+                    mostAccessedSystem?.system || "N/A"
+                  }}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Password Management Card -->
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-medium text-gray-700">Passwords</h3>
+              <div class="text-3xl opacity-20">🔐</div>
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">Total Passwords:</span>
+                <span class="font-bold text-red-600">{{
+                  passwordExpirationStats.total
+                }}</span>
+              </div>
+              <div class="grid grid-cols-3 gap-2 text-xs mt-2">
+                <div class="bg-red-50 rounded p-2 text-center">
+                  <p class="font-bold text-red-600">
+                    {{ passwordExpirationStats.critical }}
+                  </p>
+                  <p class="text-gray-600 text-xs">Expired</p>
+                </div>
+                <div class="bg-yellow-50 rounded p-2 text-center">
+                  <p class="font-bold text-yellow-600">
+                    {{ passwordExpirationStats.warning }}
+                  </p>
+                  <p class="text-gray-600 text-xs">Warning</p>
+                </div>
+                <div class="bg-blue-50 rounded p-2 text-center">
+                  <p class="font-bold text-blue-600">
+                    {{ passwordExpirationStats.info }}
+                  </p>
+                  <p class="text-gray-600 text-xs">Info</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tertiary Analytics Cards (2 columns) -->
+        <div class="grid gap-4 md:grid-cols-2 mb-8">
+          <!-- System Overview Card -->
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-medium text-gray-700">System Overview</h3>
+              <div class="text-3xl opacity-20">🌐</div>
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="system in systemAccessOverview.slice(0, 3)"
+                :key="system.system"
+                class="flex items-center justify-between"
+              >
+                <span class="text-sm text-gray-700 truncate">{{
+                  system.system
+                }}</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-gray-900">{{
+                    system.activeUsers
+                  }}</span>
+                  <span class="text-xs text-gray-500">users</span>
+                </div>
+              </div>
+              <p
+                v-if="systemAccessOverview.length === 0"
+                class="text-xs text-gray-500 italic"
+              >
+                No systems configured
+              </p>
+            </div>
+          </div>
+
+          <!-- Compliance Summary Card -->
+          <div
+            class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-medium text-gray-700">Compliance</h3>
+              <div class="text-3xl opacity-20">✅</div>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <div class="flex justify-between mb-1">
+                  <span class="text-sm text-gray-600">Policy Adherence</span>
+                  <span class="text-sm font-bold text-green-600"
+                    >{{ avgPolicyCompliance }}%</span
+                  >
+                </div>
+                <div
+                  class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"
+                >
+                  <div
+                    class="bg-green-500 h-full"
+                    :style="{ width: avgPolicyCompliance + '%' }"
+                  ></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between mb-1">
+                  <span class="text-sm text-gray-600">User Compliance</span>
+                  <span class="text-sm font-bold text-blue-600"
+                    >{{ userCompliancePercentage }}%</span
+                  >
+                </div>
+                <div
+                  class="w-full bg-gray-200 rounded-full h-2 overflow-hidden"
+                >
+                  <div
+                    class="bg-blue-500 h-full"
+                    :style="{ width: userCompliancePercentage + '%' }"
+                  ></div>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-gray-200 text-xs text-gray-600">
+                <p>
+                  <span class="font-bold"
+                    >{{ systemHealthStatus.percentage }}%</span
+                  >
+                  of systems are healthy
+                </p>
               </div>
             </div>
           </div>
