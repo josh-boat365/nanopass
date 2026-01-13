@@ -15,8 +15,12 @@ import apiClient from "@/services/apiClient";
 import { API_ENDPOINTS } from "@/config/apiConfig";
 import { useToast } from "@/composables/useToast";
 import { useUserStore } from "@/stores/useUserStore";
+import { useDepartmentStore } from "@/stores/useDepartmentStore";
+import { storeToRefs } from "pinia";
 
 const userStore = useUserStore();
+const departmentStore = useDepartmentStore();
+const { departments } = storeToRefs(departmentStore);
 const { success, error: showError } = useToast();
 
 // Tabs
@@ -61,8 +65,25 @@ const passwordError = ref("");
 // ========================================
 
 onMounted(async () => {
+  await loadDepartments();
   await loadUserProfile();
 });
+
+// Load all departments
+const loadDepartments = async () => {
+  try {
+    await departmentStore.getAllDepartments();
+  } catch (err) {
+    console.error("Error loading departments:", err);
+  }
+};
+
+// Get department name by ID
+const getDepartmentName = (departmentId) => {
+  if (!departmentId) return "";
+  const dept = departments.value.find((d) => d.id === departmentId);
+  return dept ? dept.department_name : "";
+};
 
 // ========================================
 // PROFILE FUNCTIONS
@@ -73,10 +94,11 @@ const loadUserProfile = async () => {
   profileError.value = "";
   try {
     if (userStore.user) {
+      const departmentName = getDepartmentName(userStore.user.department_id);
       userProfile.value = {
         username: userStore.user.username || "",
         email: userStore.user.email || "",
-        department: userStore.user.department || "",
+        department: departmentName || userStore.user.department || "",
         privilege: userStore.user.admin ? "Admin" : "User",
         createdAt: userStore.user.created_at || "N/A",
       };
@@ -117,24 +139,29 @@ const fetchUserFromAPI = async () => {
     if (userStore.user) {
       userStore.user.username = userData.username || userStore.user.username;
       userStore.user.email = userData.email || userStore.user.email;
-      userStore.user.department =
-        userData.department || userStore.user.department;
+      userStore.user.department_id =
+        userData.department_id || userStore.user.department_id;
       userStore.user.full_name = userData.full_name || userStore.user.full_name;
     }
+
+    // Get department name from department_id
+    const departmentName = getDepartmentName(
+      userData.department_id || userStore.user.department_id
+    );
 
     // Update local profile data
     userProfile.value = {
       ...userProfile.value,
       username: userData.username || userProfile.value.username,
       email: userData.email || userProfile.value.email,
-      department: userData.department || userProfile.value.department,
+      department: departmentName || userProfile.value.department,
     };
 
     // Update form data
     profileFormData.value = {
       username: userData.username || profileFormData.value.username,
       email: userData.email || profileFormData.value.email,
-      department: userData.department || profileFormData.value.department,
+      department: departmentName || profileFormData.value.department,
     };
 
     return true;
