@@ -9,6 +9,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Shield,
+  AlertTriangle,
 } from "lucide-vue-next";
 import BaseLayout from "@/layouts/AppLayout.vue";
 import { storeToRefs } from "pinia";
@@ -26,6 +28,7 @@ const { success, error: showError } = useToast();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showDeleteModal = ref(false);
+const showTransferAdminModal = ref(false);
 const showPasswordFields = ref({});
 const selectedUser = ref(null);
 const searchQuery = ref("");
@@ -35,6 +38,11 @@ const currentPage = ref(1);
 const itemsPerPage = ref(10);
 const itemsPerPageOptions = [10, 25, 50, 100];
 
+// Admin transfer state
+const currentAdmin = ref(null);
+const selectedNewAdmin = ref(null);
+const transferringAdmin = ref(false);
+
 // Form data
 const formData = ref({
   username: "",
@@ -42,13 +50,13 @@ const formData = ref({
   password: "",
   password_confirmation: "",
   department_id: null,
-  admin: false,
 });
 
 // Load users on component mount
 onMounted(async () => {
   await loadUsers();
   await loadDepartments();
+  await loadCurrentAdmin();
 });
 
 // Load all users
@@ -76,6 +84,21 @@ const loadDepartments = async () => {
     console.error("Error loading departments:", err);
   }
 };
+
+// Load current admin
+const loadCurrentAdmin = async () => {
+  try {
+    const response = await userStore.getCurrentAdmin();
+    currentAdmin.value = response.admin || null;
+  } catch (err) {
+    console.error("Error loading current admin:", err);
+  }
+};
+
+// Computed: Non-admin users for transfer selection
+const nonAdminUsers = computed(() => {
+  return users.value.filter((u) => !u.admin && u.id !== user.value?.id);
+});
 
 // Computed filtered users based on search
 const filteredUsers = computed(() => {
@@ -153,7 +176,6 @@ const openAddModal = () => {
     password: "",
     password_confirmation: "",
     department_id: null,
-    admin: false,
   };
   successMessage.value = "";
   userStore.clearError();
@@ -169,7 +191,6 @@ const closeAddModal = () => {
     password: "",
     password_confirmation: "",
     department_id: null,
-    admin: false,
   };
   successMessage.value = "";
   userStore.clearError();
@@ -187,7 +208,6 @@ const openEditModal = async (userToEdit) => {
       password: "",
       password_confirmation: "",
       department_id: userData.department_id || null,
-      admin: userData.admin || false,
     };
     successMessage.value = "";
     userStore.clearError();
@@ -207,7 +227,6 @@ const closeEditModal = () => {
     password: "",
     password_confirmation: "",
     department_id: null,
-    admin: false,
   };
   successMessage.value = "";
   userStore.clearError();
@@ -270,7 +289,6 @@ const addUser = async () => {
       password: formData.value.password,
       password_confirmation: formData.value.password_confirmation,
       department_id: formData.value.department_id,
-      admin: formData.value.admin,
     };
 
     await userStore.createUser(userData);
@@ -305,7 +323,6 @@ const updateUser = async () => {
       username: formData.value.username,
       email: formData.value.email,
       department_id: formData.value.department_id,
-      admin: formData.value.admin,
     };
 
     if (formData.value.password.trim()) {
@@ -374,6 +391,60 @@ const getDepartmentName = (departmentId) => {
   const dept = departments.value.find((d) => d.id === departmentId);
   return dept ? dept.department_name : null;
 };
+
+// ========================================
+// ADMIN TRANSFER FUNCTIONS
+// ========================================
+
+// Open Transfer Admin Modal
+const openTransferAdminModal = () => {
+  selectedNewAdmin.value = null;
+  showTransferAdminModal.value = true;
+};
+
+// Close Transfer Admin Modal
+const closeTransferAdminModal = () => {
+  showTransferAdminModal.value = false;
+  selectedNewAdmin.value = null;
+};
+
+// Transfer Admin Privileges
+const handleTransferAdmin = async () => {
+  if (!selectedNewAdmin.value) {
+    showError("Please select a user to transfer admin privileges to.");
+    return;
+  }
+
+  try {
+    transferringAdmin.value = true;
+    const result = await userStore.transferAdmin(selectedNewAdmin.value);
+
+    // Show success message
+    success(
+      `Admin privileges transferred successfully to ${result.new_admin.username}. You will be logged out.`
+    );
+
+    // CRITICAL: If server logged out the user, do a hard redirect to prevent loops
+    if (result.logged_out) {
+      // Small delay to show success message
+      setTimeout(() => {
+        // Use window.location.href for hard redirect (clears all Vue state)
+        window.location.href = "/login";
+      }, 1500);
+      return; // Don't continue execution
+    }
+
+    // Fallback: If logged_out not in response, still redirect for safety
+    closeTransferAdminModal();
+    setTimeout(() => {
+      window.location.href = "/login";
+    }, 1500);
+  } catch (err) {
+    showError(err.message || "Failed to transfer admin privileges");
+    transferringAdmin.value = false;
+  }
+  // Note: Don't set transferringAdmin to false on success - page will redirect
+};
 </script>
 
 <template>
@@ -390,13 +461,23 @@ const getDepartmentName = (departmentId) => {
             Manage application users, privileges, and system assignments.
           </p>
         </div>
-        <button
-          @click="openAddModal"
-          class="inline-flex items-center gap-2 px-4 py-2 bg-black text-white text-xs sm:text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 whitespace-nowrap"
-        >
-          <Plus class="h-4 w-4" />
-          Create User
-        </button>
+        <div class="flex gap-2">
+          <button
+            v-if="user?.admin"
+            @click="openTransferAdminModal"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-xs sm:text-sm font-medium rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 whitespace-nowrap"
+          >
+            <Shield class="h-4 w-4" />
+            Transfer Admin
+          </button>
+          <button
+            @click="openAddModal"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-black text-white text-xs sm:text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 whitespace-nowrap"
+          >
+            <Plus class="h-4 w-4" />
+            Create User
+          </button>
+        </div>
       </div>
 
       <!-- Global Error Message -->
@@ -759,17 +840,6 @@ const getDepartmentName = (departmentId) => {
               </option>
             </select>
           </div>
-          <div class="flex items-center">
-            <input
-              id="add-admin"
-              v-model="formData.admin"
-              type="checkbox"
-              class="h-4 w-4 text-black border-gray-300 rounded focus:ring-black"
-            />
-            <label for="add-admin" class="ml-2 text-sm text-gray-900">
-              Admin User
-            </label>
-          </div>
 
           <!-- Modal Footer -->
           <div class="flex gap-2 sm:gap-3 justify-end pt-4">
@@ -904,16 +974,19 @@ const getDepartmentName = (departmentId) => {
               </option>
             </select>
           </div>
-          <div class="flex items-center">
-            <input
-              id="edit-admin"
-              v-model="formData.admin"
-              type="checkbox"
-              class="h-4 w-4 text-black border-gray-300 rounded focus:ring-black"
-            />
-            <label for="edit-admin" class="ml-2 text-sm text-gray-900">
-              Admin User
-            </label>
+
+          <!-- Admin Status Info -->
+          <div
+            v-if="selectedUser?.admin"
+            class="p-3 bg-amber-50 border border-amber-200 rounded-lg"
+          >
+            <div class="flex items-start gap-2">
+              <Shield class="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <p class="text-xs text-amber-800">
+                This user is the current admin. Admin privileges can only be
+                transferred using the "Transfer Admin" feature.
+              </p>
+            </div>
           </div>
 
           <!-- Modal Footer -->
@@ -993,6 +1066,92 @@ const getDepartmentName = (departmentId) => {
           >
             <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
             {{ submitting ? "Deleting..." : "Delete" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer Admin Modal -->
+    <div
+      v-if="showTransferAdminModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+    >
+      <div class="relative w-full max-w-md rounded-lg bg-white shadow-xl">
+        <!-- Modal Header -->
+        <div class="border-b px-4 sm:px-6 py-4">
+          <h2
+            class="text-lg font-semibold text-gray-900 flex items-center gap-2"
+          >
+            <Shield class="h-5 w-5 text-amber-600" />
+            Transfer Admin Privileges
+          </h2>
+        </div>
+
+        <!-- Warning Message -->
+        <div
+          class="mx-4 sm:mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg"
+        >
+          <div class="flex items-start gap-2">
+            <AlertTriangle class="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <p class="text-sm font-medium text-amber-800">Warning</p>
+              <p class="text-xs text-amber-700 mt-1">
+                You will be demoted to a regular user,
+                <strong>logged out immediately</strong>, and will need to log in
+                again. This action cannot be undone.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Current Admin Info -->
+        <div
+          class="mx-4 sm:mx-6 mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+        >
+          <p class="text-xs text-gray-500 mb-1">Current Admin</p>
+          <p class="text-sm font-medium text-gray-900">
+            {{ currentAdmin?.username || user?.username }} ({{
+              currentAdmin?.email || user?.email
+            }})
+          </p>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="px-4 sm:px-6 py-4">
+          <label class="block text-sm font-medium text-gray-900 mb-2">
+            Select New Admin *
+          </label>
+          <select
+            v-model="selectedNewAdmin"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+          >
+            <option :value="null">Select a user</option>
+            <option v-for="u in nonAdminUsers" :key="u.id" :value="u.id">
+              {{ u.username }} ({{ u.email }})
+            </option>
+          </select>
+          <p class="mt-2 text-xs text-gray-500">
+            Only non-admin users are shown. The selected user will become the
+            new system administrator.
+          </p>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="border-t px-4 sm:px-6 py-4 flex gap-2 sm:gap-3 justify-end">
+          <button
+            @click="closeTransferAdminModal"
+            :disabled="transferringAdmin"
+            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleTransferAdmin"
+            :disabled="transferringAdmin || !selectedNewAdmin"
+            class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-600 disabled:opacity-50 inline-flex items-center gap-2"
+          >
+            <Loader2 v-if="transferringAdmin" class="h-4 w-4 animate-spin" />
+            {{ transferringAdmin ? "Transferring..." : "Transfer Admin" }}
           </button>
         </div>
       </div>

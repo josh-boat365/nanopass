@@ -22,6 +22,8 @@ const API_ENDPOINTS = {
         DELETE: (id) => `/users/${id}`,
         AUDIT_TRAILS: (id) => `/users/${id}/audit-trails`,
         PERMISSIONS: (id) => `/users/${id}/permissions`,
+        TRANSFER_ADMIN: '/users/transfer-admin',
+        CURRENT_ADMIN: '/users/current-admin',
     },
 
     // Policy endpoints

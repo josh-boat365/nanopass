@@ -101,6 +101,18 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
+    // Force Logout - clears all auth state synchronously without API call
+    // Used when server has already invalidated the token (e.g., after admin transfer)
+    const forceLogout = () => {
+        user.value = null
+        token.value = null
+        users.value = []
+        currentUserDetails.value = null
+        localStorage.removeItem('user')
+        localStorage.removeItem('auth_token')
+        sessionStorage.clear()
+    }
+
     // Get All Users (LIST)
     const getAllUsers = async (params = {}) => {
         loading.value = true
@@ -215,6 +227,42 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
+    // Get Current Admin
+    const getCurrentAdmin = async () => {
+        loading.value = true
+        error.value = null
+        try {
+            const { data } = await apiClient.get(API_ENDPOINTS.USERS.CURRENT_ADMIN)
+            return data
+        } catch (err) {
+            error.value = err.message || 'Failed to fetch current admin'
+            throw err
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // Transfer Admin Privileges
+    const transferAdmin = async (userId) => {
+        loading.value = true
+        error.value = null
+        try {
+            const { data } = await apiClient.post(API_ENDPOINTS.USERS.TRANSFER_ADMIN, { user_id: userId })
+
+            // CRITICAL: If server logged out the user, clear all auth state immediately
+            if (data.logged_out) {
+                forceLogout()
+            }
+
+            return data
+        } catch (err) {
+            error.value = err.response?.data?.message || err.message || 'Failed to transfer admin privileges'
+            throw err
+        } finally {
+            loading.value = false
+        }
+    }
+
     // Clear error
     const clearError = () => {
         error.value = null
@@ -241,6 +289,7 @@ export const useUserStore = defineStore('user', () => {
         createUser,
         login,
         logout,
+        forceLogout,
         getAllUsers,
         searchUsers,
         getUserById,
@@ -248,6 +297,8 @@ export const useUserStore = defineStore('user', () => {
         deleteUser,
         getUserAuditTrails,
         getUserPermissions,
+        getCurrentAdmin,
+        transferAdmin,
         clearError
     }
 });
