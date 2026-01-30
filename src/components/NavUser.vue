@@ -26,7 +26,7 @@ const handleLogout = async () => {
   try {
     await userStore.logout();
     success("Logged out successfully");
-    await router.push(import.meta.env.BASE_URL.replace(/\/$/, "") + "/login");
+    await router.push("/login");
   } catch (err) {
     error("Logout failed. Please try again.");
   }

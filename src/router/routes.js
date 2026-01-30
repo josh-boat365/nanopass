@@ -190,7 +190,7 @@ router.beforeEach((to, from, next) => {
 
   // Check authentication requirement
   if (to.meta.requiresAuth && !isAuthenticated) {
-    next(import.meta.env.BASE_URL.replace(/\/$/, "") + "/login");
+    next("/login");
     return;
   }
 
