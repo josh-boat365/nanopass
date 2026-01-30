@@ -59,7 +59,7 @@ const handleRegister = async () => {
 
     // Redirect to login page
     setTimeout(() => {
-      router.push("/login");
+      router.push(import.meta.env.BASE_URL + "login");
     }, 1500);
   } catch (err) {
     console.error("Registration failed:", err);

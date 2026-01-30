@@ -179,7 +179,7 @@ const routes = [{
 }
 ]
 const router = createRouter({
-  history: createWebHistory('/nanopass/'),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 });
 
@@ -190,7 +190,7 @@ router.beforeEach((to, from, next) => {
 
   // Check authentication requirement
   if (to.meta.requiresAuth && !isAuthenticated) {
-    next("/login");
+    next(import.meta.env.BASE_URL + "login");
     return;
   }
 
