@@ -429,7 +429,8 @@ const handleTransferAdmin = async () => {
       // Small delay to show success message
       setTimeout(() => {
         // Use window.location.href for hard redirect (clears all Vue state)
-        window.location.href = import.meta.env.BASE_URL + "login";
+        window.location.href =
+          import.meta.env.BASE_URL.replace(/\/$/, "") + "/login";
       }, 1500);
       return; // Don't continue execution
     }
@@ -437,7 +438,8 @@ const handleTransferAdmin = async () => {
     // Fallback: If logged_out not in response, still redirect for safety
     closeTransferAdminModal();
     setTimeout(() => {
-      window.location.href = import.meta.env.BASE_URL + "login";
+      window.location.href =
+        import.meta.env.BASE_URL.replace(/\/$/, "") + "/login";
     }, 1500);
   } catch (err) {
     showError(err.message || "Failed to transfer admin privileges");

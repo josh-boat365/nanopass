@@ -97,7 +97,7 @@ export const useSessionTimeout = () => {
             // Navigate to login with a small delay to ensure state is cleared
             setTimeout(() => {
                 router.push({
-                    path: import.meta.env.BASE_URL + "login"
+                    path: import.meta.env.BASE_URL.replace(/\/$/, "") + "/login"
                 });
             }, 100);
 
@@ -106,7 +106,7 @@ export const useSessionTimeout = () => {
 
             // Ultimate fallback - force clear and redirect
             forceLogout();
-            router.push(import.meta.env.BASE_URL + "login");
+            router.push(import.meta.env.BASE_URL.replace(/\/$/, "") + "/login");
         } finally {
             isLoggingOut = false;
         }
