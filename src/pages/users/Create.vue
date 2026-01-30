@@ -109,7 +109,7 @@ const filteredUsers = computed(() => {
   return users.value.filter(
     (user) =>
       user.username?.toLowerCase().includes(query) ||
-      user.email?.toLowerCase().includes(query)
+      user.email?.toLowerCase().includes(query),
   );
 });
 
@@ -130,7 +130,7 @@ const paginationInfo = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value + 1;
   const end = Math.min(
     currentPage.value * itemsPerPage.value,
-    filteredUsers.value.length
+    filteredUsers.value.length,
   );
   return `${start}-${end} of ${filteredUsers.value.length}`;
 });
@@ -421,7 +421,7 @@ const handleTransferAdmin = async () => {
 
     // Show success message
     success(
-      `Admin privileges transferred successfully to ${result.new_admin.username}. You will be logged out.`
+      `Admin privileges transferred successfully to ${result.new_admin.username}. You will be logged out.`,
     );
 
     // CRITICAL: If server logged out the user, do a hard redirect to prevent loops
@@ -1015,9 +1015,11 @@ const handleTransferAdmin = async () => {
     <!-- Delete Confirmation Modal -->
     <div
       v-if="showDeleteModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-2 sm:p-4"
     >
-      <div class="relative w-full max-w-md rounded-lg bg-white shadow-xl">
+      <div
+        class="relative w-full max-w-xs sm:max-w-md rounded-lg bg-white shadow-xl"
+      >
         <!-- Modal Header -->
         <div class="border-b px-4 sm:px-6 py-4">
           <h2 class="text-lg font-semibold text-gray-900">Delete User</h2>
@@ -1051,7 +1053,9 @@ const handleTransferAdmin = async () => {
         </div>
 
         <!-- Modal Footer -->
-        <div class="border-t px-4 sm:px-6 py-4 flex gap-2 sm:gap-3 justify-end">
+        <div
+          class="border-t px-2 sm:px-4 md:px-6 py-4 flex gap-2 sm:gap-3 justify-end flex-wrap"
+        >
           <button
             @click="closeDeleteModal"
             :disabled="submitting"
@@ -1074,9 +1078,11 @@ const handleTransferAdmin = async () => {
     <!-- Transfer Admin Modal -->
     <div
       v-if="showTransferAdminModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-2 sm:p-4"
     >
-      <div class="relative w-full max-w-md rounded-lg bg-white shadow-xl">
+      <div
+        class="relative w-full max-w-xs sm:max-w-md rounded-lg bg-white shadow-xl"
+      >
         <!-- Modal Header -->
         <div class="border-b px-4 sm:px-6 py-4">
           <h2
@@ -1089,7 +1095,7 @@ const handleTransferAdmin = async () => {
 
         <!-- Warning Message -->
         <div
-          class="mx-4 sm:mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg"
+          class="mx-2 sm:mx-4 md:mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg"
         >
           <div class="flex items-start gap-2">
             <AlertTriangle class="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
@@ -1106,7 +1112,7 @@ const handleTransferAdmin = async () => {
 
         <!-- Current Admin Info -->
         <div
-          class="mx-4 sm:mx-6 mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+          class="mx-2 sm:mx-4 md:mx-6 mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
         >
           <p class="text-xs text-gray-500 mb-1">Current Admin</p>
           <p class="text-sm font-medium text-gray-900">
@@ -1117,7 +1123,7 @@ const handleTransferAdmin = async () => {
         </div>
 
         <!-- Modal Body -->
-        <div class="px-4 sm:px-6 py-4">
+        <div class="px-2 sm:px-4 md:px-6 py-4">
           <label class="block text-sm font-medium text-gray-900 mb-2">
             Select New Admin *
           </label>
@@ -1137,7 +1143,9 @@ const handleTransferAdmin = async () => {
         </div>
 
         <!-- Modal Footer -->
-        <div class="border-t px-4 sm:px-6 py-4 flex gap-2 sm:gap-3 justify-end">
+        <div
+          class="border-t px-2 sm:px-4 md:px-6 py-4 flex gap-2 sm:gap-3 justify-end flex-wrap"
+        >
           <button
             @click="closeTransferAdminModal"
             :disabled="transferringAdmin"

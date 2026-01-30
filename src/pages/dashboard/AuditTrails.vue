@@ -45,14 +45,14 @@ const filteredTrails = computed(() => {
         (trail.user?.username || "").toLowerCase().includes(query) ||
         (trail.user?.email || "").toLowerCase().includes(query) ||
         (trail.description || "").toLowerCase().includes(query) ||
-        (trail.ip_address || "").toLowerCase().includes(query)
+        (trail.ip_address || "").toLowerCase().includes(query),
     );
   }
 
   // Filter by category
   if (filterCategory.value !== "all") {
     results = results.filter(
-      (trail) => trail.action_category === filterCategory.value
+      (trail) => trail.action_category === filterCategory.value,
     );
   }
 
@@ -65,7 +65,7 @@ const filteredTrails = computed(() => {
   if (filterStartDate.value) {
     const startDate = new Date(filterStartDate.value);
     results = results.filter(
-      (trail) => new Date(trail.created_at) >= startDate
+      (trail) => new Date(trail.created_at) >= startDate,
     );
   }
 
@@ -93,7 +93,9 @@ const totalPages = computed(() => {
 // Unique categories from audit trails
 const uniqueCategories = computed(() => {
   const categories = new Set(
-    auditTrails.value.map((trail) => trail.action_category).filter((cat) => cat)
+    auditTrails.value
+      .map((trail) => trail.action_category)
+      .filter((cat) => cat),
   );
   return Array.from(categories).sort();
 });
@@ -237,7 +239,7 @@ const failedOperationsCount = computed(() => {
 const successRatePercentage = computed(() => {
   if (auditTrails.value.length === 0) return 0;
   const successful = auditTrails.value.filter(
-    (t) => t.status === "SUCCESS"
+    (t) => t.status === "SUCCESS",
   ).length;
   return Math.round((successful / auditTrails.value.length) * 100);
 });
@@ -386,8 +388,8 @@ const getHumanReadableAction = (trail) => {
       action === "CREATE"
         ? "CREATE"
         : action === "UPDATE"
-        ? "UPDATE"
-        : "DELETE";
+          ? "UPDATE"
+          : "DELETE";
 
     if (actionType === "CREATE") {
       return `User Created: ${username}`;
@@ -680,7 +682,7 @@ const exportToExcel = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Audit Trails");
     XLSX.writeFile(
       workbook,
-      `audit-trails-${new Date().toISOString().split("T")[0]}.xlsx`
+      `audit-trails-${new Date().toISOString().split("T")[0]}.xlsx`,
     );
     success("Audit trails exported successfully");
   } catch (err) {
@@ -706,7 +708,7 @@ const fetchAuditTrails = async () => {
 
     if (err.response?.status === 404 || err.code === "ERR_NOT_FOUND") {
       console.warn(
-        "Audit Trail API endpoint not yet implemented on backend. Using demo data instead."
+        "Audit Trail API endpoint not yet implemented on backend. Using demo data instead.",
       );
       auditTrails.value = [];
     }
@@ -720,7 +722,7 @@ watch(
   [searchQuery, filterCategory, filterStatus, filterStartDate, filterEndDate],
   () => {
     currentPage.value = 1;
-  }
+  },
 );
 
 // Initialize on component mount
@@ -732,9 +734,9 @@ onMounted(() => {
 <template>
   <BaseLayout>
     <div class="min-h-screen bg-gray-50">
-      <div class="p-6">
+      <div class="p-2 sm:p-4 md:p-6">
         <!-- Page Header -->
-        <div class="mb-8">
+        <div class="mb-6 sm:mb-8">
           <h1 class="text-3xl font-bold text-gray-900">Audit Trails</h1>
           <p class="mt-2 text-gray-600">
             {{
@@ -746,9 +748,9 @@ onMounted(() => {
         </div>
 
         <!-- Summary Cards -->
-        <div class="space-y-6 mb-8">
+        <div class="space-y-4 sm:space-y-6 mb-6 sm:mb-8">
           <!-- Primary Stats Row -->
-          <div class="grid gap-4 md:grid-cols-4">
+          <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <!-- Total Activities Card -->
             <div
               class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
@@ -843,7 +845,7 @@ onMounted(() => {
           </div>
 
           <!-- Secondary Stats Row -->
-          <div class="grid gap-4 md:grid-cols-3">
+          <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
             <!-- Password Access Events Card -->
             <div
               class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
@@ -944,7 +946,7 @@ onMounted(() => {
           </div>
 
           <!-- Tertiary Stats Row -->
-          <div class="grid gap-4 md:grid-cols-2">
+          <div class="grid gap-4 grid-cols-1 md:grid-cols-2">
             <!-- Most Accessed Systems Card -->
             <div
               class="rounded-lg border bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
@@ -1019,12 +1021,14 @@ onMounted(() => {
         </div>
 
         <!-- Filters and Table -->
-        <div v-else class="space-y-6">
+        <div v-else class="space-y-4 sm:space-y-6">
           <!-- Filters Section -->
-          <div class="rounded-lg border bg-white p-6 shadow-sm">
+          <div class="rounded-lg border bg-white p-2 sm:p-4 md:p-6 shadow-sm">
             <h2 class="text-lg font-semibold text-gray-900 mb-4">Filters</h2>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4"
+            >
               <!-- Search -->
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -1093,7 +1097,9 @@ onMounted(() => {
             </div>
 
             <!-- Date Range Filters -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div
+              class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mt-2 sm:mt-4"
+            >
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   From Date
@@ -1125,9 +1131,9 @@ onMounted(() => {
           </div>
 
           <!-- Table -->
-          <div class="rounded-lg border bg-white shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
-              <table class="w-full">
+          <div class="rounded-lg border bg-white shadow-sm overflow-x-auto">
+            <div class="min-w-[320px] md:overflow-x-auto">
+              <table class="w-full min-w-[900px] md:min-w-0 text-xs sm:text-sm">
                 <thead>
                   <tr class="border-b bg-gray-50">
                     <th
@@ -1177,7 +1183,7 @@ onMounted(() => {
                     v-if="paginatedTrails.length === 0"
                     class="hover:bg-gray-50"
                   >
-                    <td colspan="8" class="px-4 py-8 text-center">
+                    <td colspan="8" class="px-2 sm:px-4 py-8 text-center">
                       <div class="flex flex-col items-center justify-center">
                         <AlertCircle class="h-8 w-8 text-gray-300 mb-2" />
                         <p class="text-gray-600">No audit trails found</p>
@@ -1191,7 +1197,7 @@ onMounted(() => {
                     class="hover:bg-gray-50 transition-colors"
                   >
                     <!-- User Column -->
-                    <td class="px-4 py-3">
+                    <td class="px-2 sm:px-4 py-3">
                       <div class="flex items-center gap-2">
                         <div
                           class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-xs font-semibold text-blue-900 shrink-0"
@@ -1214,7 +1220,7 @@ onMounted(() => {
                     </td>
 
                     <!-- Action Column -->
-                    <td class="px-4 py-3">
+                    <td class="px-2 sm:px-4 py-3">
                       <div class="flex flex-col gap-2">
                         <div class="text-sm text-gray-900 font-medium max-w-xs">
                           {{ getHumanReadableAction(trail) }}
@@ -1231,7 +1237,7 @@ onMounted(() => {
                     </td>
 
                     <!-- Status Column -->
-                    <td class="px-4 py-3">
+                    <td class="px-2 sm:px-4 py-3">
                       <span
                         :class="[
                           'inline-flex items-center px-2 py-1 rounded text-xs font-medium',
@@ -1243,7 +1249,7 @@ onMounted(() => {
                     </td>
 
                     <!-- Previous State Column -->
-                    <td class="px-4 py-3">
+                    <td class="px-2 sm:px-4 py-3">
                       <div
                         class="bg-gray-100 rounded-md p-3 text-xs text-gray-700 max-w-xs"
                       >
@@ -1252,7 +1258,7 @@ onMounted(() => {
                     </td>
 
                     <!-- Current State Column -->
-                    <td class="px-4 py-3">
+                    <td class="px-2 sm:px-4 py-3">
                       <div
                         class="bg-green-100 rounded-md p-3 text-xs text-green-700 max-w-xs"
                       >
@@ -1261,12 +1267,14 @@ onMounted(() => {
                     </td>
 
                     <!-- IP Address Column -->
-                    <td class="px-4 py-3 text-xs font-mono text-gray-600">
+                    <td
+                      class="px-2 sm:px-4 py-3 text-xs font-mono text-gray-600"
+                    >
                       {{ trail.ip_address || "N/A" }}
                     </td>
 
                     <!-- Device Column (OS + Browser) -->
-                    <td class="px-4 py-3 text-xs">
+                    <td class="px-2 sm:px-4 py-3 text-xs">
                       <div class="space-y-0.5">
                         <div class="text-gray-900 font-medium">
                           {{ getOperatingSystem(trail.user_agent) }}
@@ -1279,7 +1287,7 @@ onMounted(() => {
 
                     <!-- Timestamp Column -->
                     <td
-                      class="px-4 py-3 text-xs text-gray-600 whitespace-nowrap"
+                      class="px-2 sm:px-4 py-3 text-xs text-gray-600 whitespace-nowrap"
                     >
                       {{ formatDate(trail.created_at) }}
                     </td>
@@ -1290,27 +1298,33 @@ onMounted(() => {
           </div>
 
           <!-- Pagination -->
-          <div class="flex items-center justify-between">
-            <div class="text-sm text-gray-600">
+          <div
+            class="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0 mt-4"
+          >
+            <div
+              class="text-xs sm:text-sm text-gray-600 w-full sm:w-auto text-center sm:text-left"
+            >
               Page {{ currentPage }} of {{ totalPages || 1 }}
             </div>
 
-            <div class="flex gap-2">
+            <div
+              class="flex gap-2 w-full sm:w-auto justify-center sm:justify-end"
+            >
               <button
                 @click="currentPage--"
                 :disabled="currentPage === 1"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-900 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="inline-flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 bg-white text-gray-900 text-xs sm:text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronLeft class="h-4 w-4" />
-                <span>Previous</span>
+                <span class="hidden xs:inline">Previous</span>
               </button>
 
               <button
                 @click="currentPage++"
                 :disabled="currentPage === totalPages"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-900 text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="inline-flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 bg-white text-gray-900 text-xs sm:text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>Next</span>
+                <span class="hidden xs:inline">Next</span>
                 <ChevronRight class="h-4 w-4" />
               </button>
             </div>
