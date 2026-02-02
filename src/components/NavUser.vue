@@ -120,12 +120,14 @@ onUnmounted(() => {
             <span>Settings</span>
           </button>
         </router-link>
-        <button
-          class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
-        >
-          <Bell class="h-4 w-4" />
-          <span>Notifications</span>
-        </button>
+        <router-link to="/notifications" @click="closeDropdown">
+          <button
+            class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
+          >
+            <Bell class="h-4 w-4" />
+            <span>Notifications</span>
+          </button>
+        </router-link>
       </div>
 
       <div class="py-1">
