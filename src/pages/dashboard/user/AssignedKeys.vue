@@ -1,7 +1,13 @@
 <script setup>
+// ========================================
+// IMPORTS & INITIALIZATION
+// ========================================
 import BaseLayout from "@/layouts/AppLayout.vue";
-import { ref, computed, onMounted } from "vue";
+import ExpiringPermissionsAlert from "@/components/ExpiringPermissionsAlert.vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useUserStore } from "@/stores/useUserStore";
+import { useNotifications } from "@/composables/useNotifications";
+import { usePermissionExpiry } from "@/composables/usePermissionExpiry";
 import {
   Eye,
   EyeOff,
@@ -23,6 +29,21 @@ import * as XLSX from "xlsx";
 
 const { success, error: showError } = useToast();
 const userStore = useUserStore();
+const {
+  notifications,
+  unreadCount,
+  fetchNotifications,
+  markAsRead,
+  startPolling,
+  stopPolling,
+} = useNotifications();
+
+const {
+  checkAndRevokeOnMount,
+  calculateDaysLeft,
+  getExpiringPermissions,
+  getJustExpiredPermissions,
+} = usePermissionExpiry();
 
 const showPasswordModal = ref(false);
 const selectedPassword = ref(null);
@@ -36,11 +57,150 @@ const currentPage = ref(1);
 const itemsPerPage = 15;
 const loading = ref(false);
 const verifyingPassword = ref(false);
+const showConfirmModal = ref(false);
+const pendingConfirmation = ref(null);
+const isConfirming = ref(false);
 
 // Assigned keys data from API
 const assignedKeys = ref([]);
 const permissions = ref([]);
 const systems = ref([]);
+
+// ========================================
+// TOGGLE SYSTEM STATUS
+// ========================================
+const systemToggleStatus = ref({});
+
+function getSystemToggleStatus(pwd) {
+  return systemToggleStatus.value[pwd.permission_id] || "";
+}
+
+function openConfirmModal(pwd, newStatus) {
+  pendingConfirmation.value = { pwd, newStatus };
+  showConfirmModal.value = true;
+}
+
+async function confirmStatusChange() {
+  if (!pendingConfirmation.value) return;
+
+  const { pwd, newStatus } = pendingConfirmation.value;
+  isConfirming.value = true;
+
+  try {
+    const res = await apiClient.post(
+      `/systems/${pwd.system_id}/toggle-status`,
+      { status: newStatus },
+    );
+    if (res.data && res.data.success) {
+      // Update the local status
+      systemToggleStatus.value = {
+        ...systemToggleStatus.value,
+        [pwd.permission_id]: newStatus,
+      };
+      success(res.data.message || "Status updated");
+
+      // Remove from the list after a short delay
+      setTimeout(() => {
+        permissions.value = permissions.value.filter((p) => p.id !== pwd.id);
+      }, 500);
+
+      // Fetch notifications after status change
+      await fetchNotifications();
+    } else {
+      showError("Failed to update status");
+      // Reset the select
+      systemToggleStatus.value = {
+        ...systemToggleStatus.value,
+        [pwd.permission_id]: "",
+      };
+    }
+  } catch (err) {
+    showError(err.response?.data?.message || "Failed to update status");
+    // Reset the select
+    systemToggleStatus.value = {
+      ...systemToggleStatus.value,
+      [pwd.permission_id]: "",
+    };
+  } finally {
+    isConfirming.value = false;
+    showConfirmModal.value = false;
+    pendingConfirmation.value = null;
+  }
+}
+
+function cancelStatusChange() {
+  showConfirmModal.value = false;
+  // Reset the select back to empty
+  if (pendingConfirmation.value) {
+    const { pwd } = pendingConfirmation.value;
+    systemToggleStatus.value = {
+      ...systemToggleStatus.value,
+      [pwd.permission_id]: "",
+    };
+  }
+  pendingConfirmation.value = null;
+}
+
+async function onToggleStatusChange(event, pwd) {
+  const newStatus = event.target.value;
+
+  // If selecting "done", show confirmation modal
+  if (newStatus === "done") {
+    // Temporarily update the UI
+    systemToggleStatus.value = {
+      ...systemToggleStatus.value,
+      [pwd.permission_id]: newStatus,
+    };
+    openConfirmModal(pwd, newStatus);
+  } else if (newStatus === "inuse") {
+    // For "inuse", directly update without confirmation
+    systemToggleStatus.value = {
+      ...systemToggleStatus.value,
+      [pwd.permission_id]: newStatus,
+    };
+    try {
+      const res = await apiClient.post(
+        `/systems/${pwd.system_id}/toggle-status`,
+        { status: newStatus },
+      );
+      if (res.data && res.data.success) {
+        success(res.data.message || "Status updated");
+        // Persist status to localStorage
+        const statusKey = `system_status_${pwd.permission_id}`;
+        localStorage.setItem(statusKey, newStatus);
+        // Fetch notifications after status change
+        await fetchNotifications();
+      } else {
+        showError("Failed to update status");
+        systemToggleStatus.value = {
+          ...systemToggleStatus.value,
+          [pwd.permission_id]: "",
+        };
+      }
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to update status");
+      systemToggleStatus.value = {
+        ...systemToggleStatus.value,
+        [pwd.permission_id]: "",
+      };
+    }
+  }
+}
+
+// Initialize toggle status for each permission after permissions load
+watch(
+  permissions,
+  (newPerms) => {
+    const map = {};
+    for (const perm of newPerms) {
+      // Check localStorage for saved status
+      const savedStatus = localStorage.getItem(`system_status_${perm.id}`);
+      map[perm.id] = savedStatus || "";
+    }
+    systemToggleStatus.value = map;
+  },
+  { immediate: true },
+);
 
 const statusColors = {
   critical: "text-red-600",
@@ -55,15 +215,6 @@ const statusColors = {
 const getSystemName = (systemId) => {
   const system = systems.value.find((s) => s.id === systemId);
   return system ? system.system_name : "Unknown System";
-};
-
-const calculateDaysLeft = (expiryDate) => {
-  if (!expiryDate) return 0;
-  const today = new Date();
-  const expiry = new Date(expiryDate);
-  const diffTime = expiry - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return Math.max(0, diffDays);
 };
 
 const getStatus = (daysLeft) => {
@@ -98,7 +249,7 @@ const exportToExcel = (exportFiltered = false) => {
         "System Name": key.systemName,
         "Expiry Date": new Date(key.date_time_expiry).toLocaleDateString(
           "en-US",
-          { year: "numeric", month: "short", day: "numeric" }
+          { year: "numeric", month: "short", day: "numeric" },
         ),
         "Days Left": key.daysLeft,
         Status: key.status.charAt(0).toUpperCase() + key.status.slice(1),
@@ -149,12 +300,27 @@ const exportToExcel = (exportFiltered = false) => {
 
 onMounted(async () => {
   await loadData();
+  // Start polling for notifications
+  startPolling(30000); // Poll every 30 seconds
+  // One-time check for already-expired permissions on mount
+  await checkAndRevokeOnMount(permissions.value);
+});
+
+onUnmounted(() => {
+  // Stop polling when component is unmounted
+  stopPolling();
 });
 
 const loadData = async () => {
   loading.value = true;
   try {
-    await Promise.allSettled([loadPermissions(), loadSystems()]);
+    await Promise.allSettled([
+      loadPermissions(),
+      loadSystems(),
+      fetchNotifications(),
+    ]);
+    // Check for already-expired permissions on load and revoke them
+    await checkAndRevokeOnMount(permissions.value);
   } catch (err) {
     console.error("Error loading data:", err);
     showError("Failed to load assigned keys");
@@ -194,28 +360,45 @@ const loadSystems = async () => {
 
 // Format assigned keys from permissions
 const formattedKeys = computed(() => {
-  return permissions.value.map((perm) => {
-    const daysLeft = calculateDaysLeft(perm.date_time_expiry);
-    return {
-      id: perm.id,
-      permission_id: perm.id,
-      password_id: perm.password_id,
-      system_id: perm.system_id,
-      systemName: getSystemName(perm.system_id),
-      username: perm.user?.username || perm.username || "N/A",
-      email: perm.user?.email || perm.email || "N/A",
-      date_time_expiry: perm.date_time_expiry,
-      daysLeft,
-      status: getStatus(daysLeft),
-    };
-  });
-});
+  return permissions.value
+    .filter((perm) => {
+      // Only include permissions where the system exists
+      // This ensures users only see systems they have valid access to
+      const system = systems.value.find((s) => s.id === perm.system_id);
+      if (!system) {
+        console.warn(
+          `⚠️ Permission ${perm.id} references non-existent system ${perm.system_id}. Filtering out.`,
+        );
+        return false;
+      }
 
-// const statusColors = {
-//   critical: "text-red-600",
-//   warning: "text-yellow-600",
-//   healthy: "text-green-600",
-// };
+      // Filter out expired permissions (only show if days remaining > 0)
+      const daysLeft = calculateDaysLeft(perm.date_time_expiry);
+      if (daysLeft <= 0) {
+        console.log(
+          `⏰ Permission ${perm.id} has expired. Filtering out from display.`,
+        );
+        return false;
+      }
+
+      return true;
+    })
+    .map((perm) => {
+      const daysLeft = calculateDaysLeft(perm.date_time_expiry);
+      return {
+        id: perm.id,
+        permission_id: perm.id,
+        password_id: perm.password_id,
+        system_id: perm.system_id,
+        systemName: getSystemName(perm.system_id),
+        username: perm.user?.username || perm.username || "N/A",
+        email: perm.user?.email || perm.email || "N/A",
+        date_time_expiry: perm.date_time_expiry,
+        daysLeft,
+        status: getStatus(daysLeft),
+      };
+    });
+});
 
 // Computed: Filtered keys based on search
 const filteredKeys = computed(() => {
@@ -250,7 +433,7 @@ const paginationInfo = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage + 1;
   const end = Math.min(
     currentPage.value * itemsPerPage,
-    filteredKeys.value.length
+    filteredKeys.value.length,
   );
   return `${start}-${end} of ${filteredKeys.value.length}`;
 });
@@ -293,7 +476,7 @@ const handleVerifyPassword = async () => {
       // Password verified successfully
       console.log(
         "✅ Password verified for user:",
-        verifyResponse.data.data.username
+        verifyResponse.data.data.username,
       );
 
       // Step 2: Access password through proper endpoint with permission checks and logging
@@ -338,13 +521,16 @@ const handleVerifyPassword = async () => {
 
         console.log(
           "✅ Password accessed and logged via /passwords/access endpoint:",
-          revealedPassword.value
+          revealedPassword.value,
         );
         success("Password verified successfully!");
         accountPassword.value = "";
       } catch (pwdErr) {
         console.error("Error fetching system password:", pwdErr);
+        // Display the actual error message from the backend
         passwordError.value =
+          pwdErr?.message ||
+          pwdErr?.data?.message ||
           "Verified but unable to retrieve system password.";
       }
     } else {
@@ -364,7 +550,7 @@ const handleVerifyPassword = async () => {
 // Helper function to disable password input temporarily
 const disablePasswordInputFor = (milliseconds) => {
   const passwordInput = document.querySelector(
-    'input[type="password"][placeholder*="password"]'
+    'input[type="password"][placeholder*="password"]',
   );
   if (passwordInput) {
     passwordInput.disabled = true;
@@ -482,6 +668,11 @@ const toggleUsernameVisibility = () => {
         </p>
       </div>
 
+      <!-- Expiring Permissions Alert -->
+      <div class="mb-6">
+        <ExpiringPermissionsAlert />
+      </div>
+
       <!-- Main Content -->
       <div class="space-y-6">
         <div class="rounded-lg border bg-white shadow-sm overflow-hidden">
@@ -585,6 +776,11 @@ const toggleUsernameVisibility = () => {
                   <th
                     class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
                   >
+                    Status
+                  </th>
+                  <th
+                    class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase"
+                  >
                     Actions
                   </th>
                 </tr>
@@ -618,7 +814,7 @@ const toggleUsernameVisibility = () => {
                     {{
                       new Date(pwd.date_time_expiry).toLocaleDateString(
                         "en-US",
-                        { year: "numeric", month: "short", day: "numeric" }
+                        { year: "numeric", month: "short", day: "numeric" },
                       )
                     }}
                   </td>
@@ -648,6 +844,17 @@ const toggleUsernameVisibility = () => {
                         {{ pwd.daysLeft }}d
                       </span>
                     </div>
+                  </td>
+                  <td class="px-4 sm:px-6 py-4">
+                    <select
+                      :value="getSystemToggleStatus(pwd)"
+                      @change="onToggleStatusChange($event, pwd)"
+                      class="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-black focus:border-transparent"
+                    >
+                      <option value="" disabled>Select Status</option>
+                      <option value="inuse">In Use</option>
+                      <option value="done">Done</option>
+                    </select>
                   </td>
                   <td class="px-4 sm:px-6 py-4">
                     <button
@@ -945,6 +1152,67 @@ const toggleUsernameVisibility = () => {
               </button>
             </div>
           </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Status Change Modal -->
+    <div
+      v-if="showConfirmModal && pendingConfirmation"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+    >
+      <div class="relative w-full max-w-md rounded-lg bg-white shadow-xl">
+        <div class="border-b px-6 py-4 flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-gray-900">
+            Confirm Status Change
+          </h2>
+          <button
+            @click="cancelStatusChange"
+            :disabled="isConfirming"
+            class="text-gray-500 hover:text-gray-700 disabled:opacity-50"
+          >
+            <X class="h-5 w-5" />
+          </button>
+        </div>
+
+        <div class="px-6 py-4">
+          <div class="mb-6">
+            <p class="text-sm text-gray-600 mb-4">
+              Are you sure you want to mark this system as
+              <span class="font-semibold text-gray-900">Done</span>?
+            </p>
+            <div class="bg-red-50 p-4 rounded-md border border-red-200">
+              <p class="text-sm font-medium text-red-800 mb-2">⚠️ Important:</p>
+              <p class="text-sm text-red-700">
+                Once marked as done, your access to this system will be revoked
+                and it will be removed from your assigned keys list.
+              </p>
+            </div>
+            <div class="mt-4 bg-gray-50 p-3 rounded-md border border-gray-200">
+              <p class="text-sm text-gray-600">System:</p>
+              <p class="text-sm font-medium text-gray-900">
+                {{ pendingConfirmation?.pwd?.systemName }}
+              </p>
+            </div>
+          </div>
+
+          <div class="border-t pt-4 flex gap-3">
+            <button
+              @click="cancelStatusChange"
+              :disabled="isConfirming"
+              class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmStatusChange"
+              :disabled="isConfirming"
+              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition-colors"
+            >
+              <Loader2 v-if="isConfirming" class="h-4 w-4 animate-spin" />
+              {{ isConfirming ? "Confirming..." : "Mark as Done" }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
