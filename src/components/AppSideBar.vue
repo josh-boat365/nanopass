@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Users2,
   SettingsIcon,
+  History,
 } from "lucide-vue-next";
 import { useRoute } from "vue-router";
 import { computed } from "vue";
@@ -59,6 +60,11 @@ const allNavMain = [
       {
         title: "Access Trails",
         url: "/admin/dashboard/auth-trails",
+        roles: ["admin"],
+      },
+      {
+        title: "Revocation History",
+        url: "/admin/dashboard/revocation-history",
         roles: ["admin"],
       },
     ],
@@ -124,7 +130,7 @@ const data = computed(() => {
       .map((section) => ({
         ...section,
         items: section.items.filter(
-          (item) => !item.roles || item.roles.includes(userRole)
+          (item) => !item.roles || item.roles.includes(userRole),
         ),
       })),
   };
