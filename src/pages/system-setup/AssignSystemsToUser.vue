@@ -234,8 +234,8 @@ const notifyAssignment = async (userId, assignedSystems) => {
     );
 
     const results = await Promise.allSettled([
-      apiClient.post("/api/notifications", userNotification),
-      apiClient.post("/api/notifications", adminNotification),
+      apiClient.post("/notifications", userNotification),
+      apiClient.post("/notifications", adminNotification),
     ]);
 
     results.forEach((result, index) => {
@@ -296,8 +296,8 @@ const notifyNewAssignments = async (userId, newSystemIds) => {
 
     console.log("📤 Sending new assignment notifications for:", user.email);
     const results = await Promise.allSettled([
-      apiClient.post("/api/notifications", userNotification),
-      apiClient.post("/api/notifications", adminNotification),
+      apiClient.post("/notifications", userNotification),
+      apiClient.post("/notifications", adminNotification),
     ]);
 
     results.forEach((result, index) => {
@@ -373,8 +373,8 @@ const notifyAssignmentUpdate = async (
 
     console.log("📤 Sending assignment update notifications for:", user.email);
     const results = await Promise.allSettled([
-      apiClient.post("/api/notifications", userNotification),
-      apiClient.post("/api/notifications", adminNotification),
+      apiClient.post("/notifications", userNotification),
+      apiClient.post("/notifications", adminNotification),
     ]);
 
     results.forEach((result, index) => {
