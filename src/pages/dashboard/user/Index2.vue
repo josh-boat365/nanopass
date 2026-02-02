@@ -166,14 +166,17 @@ const statusBgColors = {
 
 // Computed: Combined and filtered keys
 const allKeys = computed(() => {
+  // Filter out expired assigned keys
+  const activeAssignedKeys = assignedKeys.value.filter((k) => k.daysLeft > 0);
+
   let keys = [];
-  
+
   if (activeTab.value === "all") {
-    keys = [...personalKeys.value, ...assignedKeys.value];
+    keys = [...personalKeys.value, ...activeAssignedKeys];
   } else if (activeTab.value === "personal") {
     keys = [...personalKeys.value];
   } else if (activeTab.value === "assigned") {
-    keys = [...assignedKeys.value];
+    keys = [...activeAssignedKeys];
   }
 
   if (!searchQuery.value) {
@@ -181,17 +184,21 @@ const allKeys = computed(() => {
   }
 
   const query = searchQuery.value.toLowerCase();
-  return keys.filter((key) =>
-    key.systemName.toLowerCase().includes(query) ||
-    (key.description && key.description.toLowerCase().includes(query))
+  return keys.filter(
+    (key) =>
+      key.systemName.toLowerCase().includes(query) ||
+      (key.description && key.description.toLowerCase().includes(query)),
   );
 });
 
 // Computed statistics
 const stats = computed(() => {
-  const total = personalKeys.value.length + assignedKeys.value.length;
-  const allCombined = [...personalKeys.value, ...assignedKeys.value];
-  
+  // Filter out expired assigned keys (daysLeft <= 0)
+  const activeAssignedKeys = assignedKeys.value.filter((k) => k.daysLeft > 0);
+
+  const total = personalKeys.value.length + activeAssignedKeys.length;
+  const allCombined = [...personalKeys.value, ...activeAssignedKeys];
+
   const critical = allCombined.filter((k) => k.status === "critical").length;
   const warning = allCombined.filter((k) => k.status === "warning").length;
   const healthy = allCombined.filter((k) => k.status === "healthy").length;
@@ -199,7 +206,7 @@ const stats = computed(() => {
   return {
     total,
     personal: personalKeys.value.length,
-    assigned: assignedKeys.value.length,
+    assigned: activeAssignedKeys.length,
     critical,
     warning,
     healthy,
@@ -288,8 +295,8 @@ const togglePasswordVisibility = () => {
 };
 
 const getTypeColor = (type) => {
-  return type === "personal" 
-    ? "bg-blue-100 text-blue-700 border-blue-200" 
+  return type === "personal"
+    ? "bg-blue-100 text-blue-700 border-blue-200"
     : "bg-purple-100 text-purple-700 border-purple-200";
 };
 
@@ -303,16 +310,16 @@ const getTypeLabel = (type) => {
     <div class="p-4 sm:p-6">
       <!-- Page Header -->
       <div class="mb-8">
-        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
-          Dashboard
-        </h1>
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
         <p class="mt-2 text-sm sm:text-base text-gray-600">
           Overview of your password management
         </p>
       </div>
 
       <!-- Stats Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
+      <div
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6"
+      >
         <!-- Total Keys -->
         <div class="bg-white rounded-lg border shadow-sm p-6">
           <div class="flex items-center justify-between">
@@ -322,7 +329,9 @@ const getTypeLabel = (type) => {
                 {{ stats.total }}
               </p>
             </div>
-            <div class="h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
+            <div
+              class="h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center"
+            >
               <Key class="h-6 w-6 text-gray-700" />
             </div>
           </div>
@@ -347,13 +356,13 @@ const getTypeLabel = (type) => {
                 {{ stats.critical }}
               </p>
             </div>
-            <div class="h-12 w-12 bg-red-50 rounded-lg flex items-center justify-center">
+            <div
+              class="h-12 w-12 bg-red-50 rounded-lg flex items-center justify-center"
+            >
               <AlertTriangle class="h-6 w-6 text-red-600" />
             </div>
           </div>
-          <p class="text-xs text-gray-500 mt-4">
-            Expiring within 7 days
-          </p>
+          <p class="text-xs text-gray-500 mt-4">Expiring within 7 days</p>
         </div>
 
         <!-- Warning Keys -->
@@ -365,13 +374,13 @@ const getTypeLabel = (type) => {
                 {{ stats.warning }}
               </p>
             </div>
-            <div class="h-12 w-12 bg-yellow-50 rounded-lg flex items-center justify-center">
+            <div
+              class="h-12 w-12 bg-yellow-50 rounded-lg flex items-center justify-center"
+            >
               <Clock class="h-6 w-6 text-yellow-600" />
             </div>
           </div>
-          <p class="text-xs text-gray-500 mt-4">
-            Expiring within 30 days
-          </p>
+          <p class="text-xs text-gray-500 mt-4">Expiring within 30 days</p>
         </div>
 
         <!-- Healthy Keys -->
@@ -383,13 +392,13 @@ const getTypeLabel = (type) => {
                 {{ stats.healthy }}
               </p>
             </div>
-            <div class="h-12 w-12 bg-green-50 rounded-lg flex items-center justify-center">
+            <div
+              class="h-12 w-12 bg-green-50 rounded-lg flex items-center justify-center"
+            >
               <Shield class="h-6 w-6 text-green-600" />
             </div>
           </div>
-          <p class="text-xs text-gray-500 mt-4">
-            More than 30 days remaining
-          </p>
+          <p class="text-xs text-gray-500 mt-4">More than 30 days remaining</p>
         </div>
       </div>
 
@@ -399,11 +408,11 @@ const getTypeLabel = (type) => {
           <!-- Header with Tabs and Search -->
           <div class="border-b bg-gray-50 px-4 sm:px-6 py-4">
             <div class="flex flex-col gap-4">
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div
+                class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+              >
                 <div>
-                  <h2 class="text-lg font-semibold text-gray-900">
-                    All Keys
-                  </h2>
+                  <h2 class="text-lg font-semibold text-gray-900">All Keys</h2>
                   <p class="text-sm text-gray-600 mt-1">
                     Total: {{ allKeys.length }} keys
                   </p>
@@ -432,7 +441,7 @@ const getTypeLabel = (type) => {
                     'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
                     activeTab === 'all'
                       ? 'border-black text-black'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
                   ]"
                 >
                   All Keys ({{ stats.total }})
@@ -443,7 +452,7 @@ const getTypeLabel = (type) => {
                     'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
                     activeTab === 'personal'
                       ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
                   ]"
                 >
                   Personal ({{ stats.personal }})
@@ -454,7 +463,7 @@ const getTypeLabel = (type) => {
                     'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
                     activeTab === 'assigned'
                       ? 'border-purple-600 text-purple-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
                   ]"
                 >
                   Assigned ({{ stats.assigned }})
@@ -515,7 +524,7 @@ const getTypeLabel = (type) => {
                     <span
                       :class="[
                         'inline-flex items-center px-2 py-1 rounded text-xs font-medium border',
-                        getTypeColor(key.type)
+                        getTypeColor(key.type),
                       ]"
                     >
                       {{ getTypeLabel(key.type) }}
@@ -699,7 +708,7 @@ const getTypeLabel = (type) => {
                   <span
                     :class="[
                       'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border',
-                      getTypeColor(selectedPassword?.type)
+                      getTypeColor(selectedPassword?.type),
                     ]"
                   >
                     {{ getTypeLabel(selectedPassword?.type) }}
@@ -760,7 +769,7 @@ const getTypeLabel = (type) => {
                   <span
                     :class="[
                       'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border',
-                      getTypeColor(revealedPassword.type)
+                      getTypeColor(revealedPassword.type),
                     ]"
                   >
                     {{ getTypeLabel(revealedPassword.type) }}
@@ -785,11 +794,14 @@ const getTypeLabel = (type) => {
                   class="flex items-center gap-2 bg-gray-50 p-3 rounded-md border border-gray-200"
                 >
                   <Lock class="h-4 w-4 text-gray-400 flex-shrink-0" />
-                  <code class="text-sm font-mono text-gray-900 flex-1 break-all">{{
-                    showPassword
-                      ? revealedPassword.password
-                      : maskPassword(revealedPassword.password)
-                  }}</code>
+                  <code
+                    class="text-sm font-mono text-gray-900 flex-1 break-all"
+                    >{{
+                      showPassword
+                        ? revealedPassword.password
+                        : maskPassword(revealedPassword.password)
+                    }}</code
+                  >
                   <button
                     @click="togglePasswordVisibility"
                     class="text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
@@ -825,7 +837,10 @@ const getTypeLabel = (type) => {
                 </div>
               </div>
 
-              <div v-if="revealedPassword.type === 'assigned'" class="grid grid-cols-2 gap-4">
+              <div
+                v-if="revealedPassword.type === 'assigned'"
+                class="grid grid-cols-2 gap-4"
+              >
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1"
                     >Assigned By</label
@@ -883,20 +898,20 @@ const getTypeLabel = (type) => {
                       ]"
                     >
                       {{
-                        revealedPassword.status === 'critical'
-                          ? 'Critical: Password expires soon!'
-                          : revealedPassword.status === 'warning'
-                          ? 'Warning: Password expiring within 30 days'
-                          : 'Healthy: Password is current'
+                        revealedPassword.status === "critical"
+                          ? "Critical: Password expires soon!"
+                          : revealedPassword.status === "warning"
+                            ? "Warning: Password expiring within 30 days"
+                            : "Healthy: Password is current"
                       }}
                     </p>
                     <p class="text-xs text-gray-600 mt-1">
                       {{
-                        revealedPassword.status === 'critical'
-                          ? 'Please update your password immediately to maintain access.'
-                          : revealedPassword.status === 'warning'
-                          ? 'Consider updating your password soon.'
-                          : 'Your password is in good standing.'
+                        revealedPassword.status === "critical"
+                          ? "Please update your password immediately to maintain access."
+                          : revealedPassword.status === "warning"
+                            ? "Consider updating your password soon."
+                            : "Your password is in good standing."
                       }}
                     </p>
                   </div>
