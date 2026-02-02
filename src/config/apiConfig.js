@@ -1,6 +1,7 @@
 // src/config/apiConfig.js
 
 const API_BASE_URL = 'http://192.168.1.200/nanopass-backend/public/api';
+// const API_BASE_URL = 'http://nanopass-backend.test/api';
 
 const API_ENDPOINTS = {
     // Auth endpoints
@@ -75,6 +76,12 @@ const API_ENDPOINTS = {
         BY_USER: (userId) => `/permissions/user/${userId}`,
         BY_SYSTEM: (systemId) => `/permissions/system/${systemId}`,
         ACTIVE: '/permissions/active',
+        REVOKE: (id) => `/permissions/${id}/revoke`,
+        CHECK_EXPIRED: '/permissions/check-expired',
+        BULK_REVOKE: '/permissions/bulk-revoke',
+        EXPIRING: '/permissions/expiring',
+        REVOCATION_HISTORY: '/permissions/revocation-history',
+        DASHBOARD_METRICS: '/dashboard/permissions-metrics',
     },
 
     // Personal Key endpoints
@@ -121,6 +128,14 @@ const API_ENDPOINTS = {
         ADMIN_ACTIVITY: '/audit-trails/admin-activity',
         EXPORT: '/audit-trails/export',
         STATISTICS: '/audit-trails/statistics',
+    },
+
+    // Notification endpoints
+    NOTIFICATIONS: {
+        LIST: '/notifications',
+        MARK_READ: (id) => `/notifications/${id}/read`,
+        MARK_ALL_READ: '/notifications/mark-all-read',
+        DELETE: (id) => `/notifications/${id}`,
     },
 };
 
