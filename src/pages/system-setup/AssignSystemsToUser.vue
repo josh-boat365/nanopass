@@ -15,8 +15,10 @@ import BaseLayout from "@/layouts/AppLayout.vue";
 import apiClient from "@/services/apiClient";
 import { API_ENDPOINTS } from "@/config/apiConfig";
 import { useToast } from "@/composables/useToast";
+import { useUserStore } from "@/stores/useUserStore";
 
 const { success, error: showError } = useToast();
+const userStore = useUserStore();
 
 // ========================================
 // STATE MANAGEMENT
@@ -76,20 +78,36 @@ const isExpired = (date) => {
   return new Date(date) < new Date();
 };
 
+const calculateDaysLeft = (expiryDate) => {
+  if (!expiryDate) return 0;
+  const today = new Date();
+  const expiry = new Date(expiryDate);
+  const diffTime = expiry - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(0, diffDays);
+};
+
 // ========================================
 // COMPUTED PROPERTIES
 // ========================================
 
-// Filtered permissions based on search
+// Filtered permissions based on search and expiry status
 const filteredPermissions = computed(() => {
+  // First filter by expiry - exclude expired permissions
+  let results = permissions.value.filter((perm) => {
+    const daysLeft = calculateDaysLeft(perm.date_time_expiry);
+    return daysLeft > 0; // Only include active (non-expired) permissions
+  });
+
+  // Then apply search filter
   if (!searchQuery.value.trim()) {
-    return permissions.value;
+    return results;
   }
   const query = searchQuery.value.toLowerCase();
-  return permissions.value.filter(
+  return results.filter(
     (perm) =>
       (perm.user_name && perm.user_name.toLowerCase().includes(query)) ||
-      (perm.system_name && perm.system_name.toLowerCase().includes(query))
+      (perm.system_name && perm.system_name.toLowerCase().includes(query)),
   );
 });
 
@@ -108,7 +126,7 @@ const paginationInfo = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value + 1;
   const end = Math.min(
     currentPage.value * itemsPerPage.value,
-    groupedPermissions.value.length
+    groupedPermissions.value.length,
   );
   const total = groupedPermissions.value.length;
   return `${start}-${end} of ${total}`;
@@ -123,14 +141,14 @@ const filteredSystems = computed(() => {
   return systems.value.filter(
     (system) =>
       system.system_name?.toLowerCase().includes(query) ||
-      (system.code && system.code.toLowerCase().includes(query))
+      (system.code && system.code.toLowerCase().includes(query)),
   );
 });
 
 // Get selected systems
 const selectedSystems = computed(() => {
   return systems.value.filter((system) =>
-    formData.value.system_ids.includes(system.id)
+    formData.value.system_ids.includes(system.id),
   );
 });
 
@@ -166,6 +184,216 @@ const paginatedGroupedPermissions = computed(() => {
 });
 
 // ========================================
+// NOTIFICATION FUNCTIONS
+// ========================================
+
+const notifyAssignment = async (userId, assignedSystems) => {
+  try {
+    if (!userId || !assignedSystems || assignedSystems.length === 0) {
+      console.warn("⚠️ Invalid notification params: userId or systems missing");
+      return;
+    }
+
+    const user = users.value.find((u) => u.id === userId);
+    if (!user || !user.email) {
+      console.warn("⚠️ User not found:", userId);
+      return;
+    }
+
+    const systemNames = assignedSystems
+      .map((sId) => {
+        const sys = systems.value.find((s) => s.id === sId);
+        return sys?.system_name || `System ${sId}`;
+      })
+      .join(", ");
+
+    // Send notifications to user and admin
+    const userNotification = {
+      user_id: userId,
+      type: "assignment",
+      title: "Systems Assigned",
+      message: `You have been assigned to the following systems: ${systemNames}`,
+      read: false,
+      data: { systems: assignedSystems },
+    };
+
+    const adminNotification = {
+      type: "assignment",
+      title: "Systems Assigned to User",
+      message: `${user.username || user.email} has been assigned to the following systems: ${systemNames}`,
+      read: false,
+      data: {
+        user_id: userId,
+        user_email: user.email,
+        systems: assignedSystems,
+      },
+    };
+
+    console.log(
+      `📤 Sending notifications for user ${user.username || user.email}: ${systemNames}`,
+    );
+
+    const results = await Promise.allSettled([
+      apiClient.post("/api/notifications", userNotification),
+      apiClient.post("/api/notifications", adminNotification),
+    ]);
+
+    results.forEach((result, index) => {
+      const type = index === 0 ? "user" : "admin";
+      if (result.status === "fulfilled") {
+        console.log(`✅ ${type.toUpperCase()} notification sent successfully`);
+      } else {
+        console.error(
+          `❌ ${type.toUpperCase()} notification failed:`,
+          result.reason.message,
+        );
+      }
+    });
+  } catch (err) {
+    console.error("⚠️ Failed to send notifications (non-critical):", err);
+  }
+};
+
+/**
+ * Notify user of new/add-on system assignments
+ */
+const notifyNewAssignments = async (userId, newSystemIds) => {
+  try {
+    if (!userId || !newSystemIds || newSystemIds.length === 0) {
+      console.warn("⚠️ Invalid notification params for new assignments");
+      return;
+    }
+
+    const user = users.value.find((u) => u.id === userId);
+    if (!user || !user.email) {
+      console.warn("⚠️ User not found:", userId);
+      return;
+    }
+
+    const systemNames = newSystemIds
+      .map((sId) => {
+        const sys = systems.value.find((s) => s.id === sId);
+        return sys?.system_name || `System ${sId}`;
+      })
+      .join(", ");
+
+    const userNotification = {
+      user_id: userId,
+      type: "assignment",
+      title: "Access Duration Extended",
+      message: `You have been granted additional access to: ${systemNames}`,
+      read: false,
+      data: { systems: newSystemIds },
+    };
+
+    const adminNotification = {
+      type: "assignment",
+      title: "Access Duration Extended",
+      message: `${user.username || user.email} has been granted additional access to: ${systemNames}`,
+      read: false,
+      data: { user_id: userId, user_email: user.email, systems: newSystemIds },
+    };
+
+    console.log("📤 Sending new assignment notifications for:", user.email);
+    const results = await Promise.allSettled([
+      apiClient.post("/api/notifications", userNotification),
+      apiClient.post("/api/notifications", adminNotification),
+    ]);
+
+    results.forEach((result, index) => {
+      const type = index === 0 ? "user" : "admin";
+      if (result.status === "fulfilled") {
+        console.log(`✅ ${type.toUpperCase()} notification sent successfully`);
+      } else {
+        console.error(
+          `❌ ${type.toUpperCase()} notification failed:`,
+          result.reason.message,
+        );
+      }
+    });
+  } catch (err) {
+    console.error("⚠️ Failed to send notifications (non-critical):", err);
+  }
+};
+
+/**
+ * Notify user of updated system assignment details (e.g., expiry date change)
+ */
+const notifyAssignmentUpdate = async (
+  userId,
+  updatedSystemIds,
+  newExpiryDate,
+) => {
+  try {
+    if (!userId || !updatedSystemIds || updatedSystemIds.length === 0) {
+      console.warn("⚠️ Invalid notification params for update");
+      return;
+    }
+
+    const user = users.value.find((u) => u.id === userId);
+    if (!user || !user.email) {
+      console.warn("⚠️ User not found:", userId);
+      return;
+    }
+
+    const systemNames = updatedSystemIds
+      .map((sId) => {
+        const sys = systems.value.find((s) => s.id === sId);
+        return sys?.system_name || `System ${sId}`;
+      })
+      .join(", ");
+
+    const formattedDate = new Date(newExpiryDate).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    const userNotification = {
+      user_id: userId,
+      type: "assignment",
+      title: "Access Duration Updated",
+      message: `Your access to ${systemNames} has been updated. New expiry date: ${formattedDate}`,
+      read: false,
+      data: { systems: updatedSystemIds, new_expiry_date: newExpiryDate },
+    };
+
+    const adminNotification = {
+      type: "assignment",
+      title: "Access Duration Updated",
+      message: `${user.username || user.email}'s access to ${systemNames} has been updated. New expiry date: ${formattedDate}`,
+      read: false,
+      data: {
+        user_id: userId,
+        user_email: user.email,
+        systems: updatedSystemIds,
+        new_expiry_date: newExpiryDate,
+      },
+    };
+
+    console.log("📤 Sending assignment update notifications for:", user.email);
+    const results = await Promise.allSettled([
+      apiClient.post("/api/notifications", userNotification),
+      apiClient.post("/api/notifications", adminNotification),
+    ]);
+
+    results.forEach((result, index) => {
+      const type = index === 0 ? "user" : "admin";
+      if (result.status === "fulfilled") {
+        console.log(`✅ ${type.toUpperCase()} notification sent successfully`);
+      } else {
+        console.error(
+          `❌ ${type.toUpperCase()} notification failed:`,
+          result.reason.message,
+        );
+      }
+    });
+  } catch (err) {
+    console.error("⚠️ Failed to send notifications (non-critical):", err);
+  }
+};
+
+// ========================================
 // API FUNCTIONS
 // ========================================
 
@@ -193,7 +421,7 @@ const loadAllData = async () => {
 
     console.log(
       "📊 Data load results:",
-      results.map((r) => r.status)
+      results.map((r) => r.status),
     );
 
     // Handle results
@@ -261,7 +489,7 @@ const loadPermissions = async () => {
     console.log(
       "✅ Permissions loaded:",
       permissions.value.length,
-      "permissions"
+      "permissions",
     );
     return permissions.value;
   } catch (err) {
@@ -336,7 +564,7 @@ const openEditGroupModal = (group) => {
       })),
     };
     formData.value.system_ids = group.systems.map((s) =>
-      parseInt(s.system_id, 10)
+      parseInt(s.system_id, 10),
     );
     formData.value.user_id = group.user_id;
     const expiryDate = new Date(group.systems[0].date_time_expiry);
@@ -380,7 +608,7 @@ const closeDeleteModal = () => {
 const toggleSystemSelection = (systemId) => {
   const id = parseInt(systemId, 10);
   const index = formData.value.system_ids.findIndex(
-    (sid) => parseInt(sid, 10) === id
+    (sid) => parseInt(sid, 10) === id,
   );
   if (index > -1) {
     formData.value.system_ids.splice(index, 1);
@@ -399,7 +627,7 @@ const isSystemSelected = (systemId) => {
 const removeSystem = (systemId) => {
   const id = parseInt(systemId, 10);
   const index = formData.value.system_ids.findIndex(
-    (sid) => parseInt(sid, 10) === id
+    (sid) => parseInt(sid, 10) === id,
   );
   if (index > -1) {
     formData.value.system_ids.splice(index, 1);
@@ -457,6 +685,10 @@ const addPermission = async () => {
       const count =
         response.data.meta?.count || formData.value.system_ids.length;
       success(`✓ Created ${count} permission(s)`);
+
+      // Send notifications to user and admin
+      await notifyAssignment(formData.value.user_id, formData.value.system_ids);
+
       await loadPermissions();
 
       setTimeout(() => {
@@ -487,22 +719,22 @@ const updatePermission = async () => {
 
     // Get current assigned system IDs
     const currentSystemIds = selectedPermission.value.systems.map((s) =>
-      parseInt(s.system_id, 10)
+      parseInt(s.system_id, 10),
     );
 
     // Get newly selected system IDs
     const newSystemIds = formData.value.system_ids.map((id) =>
-      parseInt(id, 10)
+      parseInt(id, 10),
     );
 
     // Find systems to remove (in current but not in new)
     const systemsToRemove = currentSystemIds.filter(
-      (id) => !newSystemIds.includes(id)
+      (id) => !newSystemIds.includes(id),
     );
 
     // Find systems to add (in new but not in current)
     const systemsToAdd = newSystemIds.filter(
-      (id) => !currentSystemIds.includes(id)
+      (id) => !currentSystemIds.includes(id),
     );
 
     // Find systems to update (in both - just update expiry date)
@@ -526,10 +758,10 @@ const updatePermission = async () => {
           apiClient.delete(`/permissions/${s.id}`).catch((err) => {
             console.error(
               `Error deleting permission for system ${s.system_id}:`,
-              err
+              err,
             );
             return Promise.reject(err);
-          })
+          }),
         );
 
       await Promise.all(deletePromises);
@@ -552,6 +784,12 @@ const updatePermission = async () => {
         throw new Error("Failed to create new permissions");
       }
       console.log(`Created ${systemsToAdd.length} permission(s)`);
+
+      // Notify user of new/add-on assignments
+      await notifyNewAssignments(
+        selectedPermission.value.user_id,
+        systemsToAdd,
+      );
     }
 
     // Step 3: Update expiry date for remaining permissions
@@ -565,10 +803,23 @@ const updatePermission = async () => {
         throw new Error("Failed to update permissions");
       }
       console.log(`Updated ${systemsToUpdate.length} permission(s)`);
+
+      // Notify user of updated assignment details
+      const updatedSystemIds = selectedPermission.value.systems
+        .filter((s) => systemsToUpdate.includes(s.id))
+        .map((s) => parseInt(s.system_id, 10));
+
+      if (updatedSystemIds.length > 0) {
+        await notifyAssignmentUpdate(
+          selectedPermission.value.user_id,
+          updatedSystemIds,
+          formData.value.date_time_expiry,
+        );
+      }
     }
 
     success(
-      `✓ Removed ${systemsToRemove.length}, Added ${systemsToAdd.length}, Updated ${systemsToUpdate.length}`
+      `✓ Removed ${systemsToRemove.length}, Added ${systemsToAdd.length}, Updated ${systemsToUpdate.length}`,
     );
     await loadPermissions();
 
@@ -601,7 +852,7 @@ const deletePermission = async () => {
         apiClient.delete(`/permissions/${system.id}`).catch((err) => {
           console.error(`Error deleting system ${system.system_name}:`, err);
           return Promise.reject(err);
-        })
+        }),
       );
 
       await Promise.all(deletePromises);
@@ -778,7 +1029,7 @@ const nextPage = () => {
                           return sysDate < earliestDate
                             ? sys.date_time_expiry
                             : earliest;
-                        }, group.systems[0]?.date_time_expiry || "")
+                        }, group.systems[0]?.date_time_expiry || ""),
                       )
                     }}
                   </div>
@@ -788,7 +1039,7 @@ const nextPage = () => {
                     :class="[
                       'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
                       group.systems.every((sys) =>
-                        isExpired(sys.date_time_expiry)
+                        isExpired(sys.date_time_expiry),
                       )
                         ? 'bg-red-100 text-red-800'
                         : 'bg-green-100 text-green-800',
@@ -796,7 +1047,7 @@ const nextPage = () => {
                   >
                     {{
                       group.systems.every((sys) =>
-                        isExpired(sys.date_time_expiry)
+                        isExpired(sys.date_time_expiry),
                       )
                         ? "All Expired"
                         : "Active"
