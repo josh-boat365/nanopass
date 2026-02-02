@@ -73,7 +73,7 @@ const loadAssignedSystems = async () => {
 
     // Filter permissions for current user and fetch system details
     const userPermissions = response.data.data.filter(
-      (perm) => perm.user_id === user.value?.id
+      (perm) => perm.user_id === user.value?.id,
     );
     console.log("🔍 Filtered user permissions:", userPermissions);
 
@@ -85,8 +85,8 @@ const loadAssignedSystems = async () => {
         ...perm,
         systemName: systemInfo?.name || `System ${perm.system_id}`,
         description: systemInfo?.description || "System access",
-        daysLeft: calculateDaysLeft(perm.expiry_date),
-        status: calculateStatus(calculateDaysLeft(perm.expiry_date)),
+        daysLeft: calculateDaysLeft(perm.date_time_expiry),
+        status: calculateStatus(calculateDaysLeft(perm.date_time_expiry)),
         assignedAt: perm.created_at,
         assignedBy: "Administrator",
         type: "assigned",
@@ -148,16 +148,15 @@ onMounted(async () => {
 
 // Computed statistics
 const stats = computed(() => {
-  const totalKeys = personalKeys.value.length + assignedKeys.value.length;
-  const criticalKeys = [...personalKeys.value, ...assignedKeys.value].filter(
-    (k) => k.status === "critical"
-  ).length;
-  const warningKeys = [...personalKeys.value, ...assignedKeys.value].filter(
-    (k) => k.status === "warning"
-  ).length;
-  const healthyKeys = [...personalKeys.value, ...assignedKeys.value].filter(
-    (k) => k.status === "healthy"
-  ).length;
+  // Filter out expired assigned keys (daysLeft <= 0)
+  const activeAssignedKeys = assignedKeys.value.filter((k) => k.daysLeft > 0);
+
+  const totalKeys = personalKeys.value.length + activeAssignedKeys.length;
+  const allKeys = [...personalKeys.value, ...activeAssignedKeys];
+
+  const criticalKeys = allKeys.filter((k) => k.status === "critical").length;
+  const warningKeys = allKeys.filter((k) => k.status === "warning").length;
+  const healthyKeys = allKeys.filter((k) => k.status === "healthy").length;
 
   return {
     total: totalKeys,
@@ -169,23 +168,26 @@ const stats = computed(() => {
 
 // Get keys expiring soon (next 30 days)
 const keysExpiringSoon = computed(() => {
-  const allKeys = [...personalKeys.value, ...assignedKeys.value];
+  // Filter out expired keys and only include those with 0 < daysLeft <= 30
+  const activeAssignedKeys = assignedKeys.value.filter((k) => k.daysLeft > 0);
+  const allKeys = [...personalKeys.value, ...activeAssignedKeys];
 
   return allKeys
-    .filter((k) => k.daysLeft <= 30)
+    .filter((k) => k.daysLeft > 0 && k.daysLeft <= 30)
     .sort((a, b) => a.daysLeft - b.daysLeft)
     .slice(0, 5);
 });
 
 // Recent activity
 const recentActivity = computed(() => {
-  const allKeys = [...personalKeys.value, ...assignedKeys.value];
+  const activeAssignedKeys = assignedKeys.value.filter((k) => k.daysLeft > 0);
+  const allKeys = [...personalKeys.value, ...activeAssignedKeys];
 
   return allKeys
     .sort(
       (a, b) =>
         new Date(b.createdAt || b.assignedAt) -
-        new Date(a.createdAt || a.assignedAt)
+        new Date(a.createdAt || a.assignedAt),
     )
     .slice(0, 4);
 });
@@ -203,8 +205,8 @@ const getStatusIcon = (status) => {
   return status === "critical"
     ? AlertCircle
     : status === "warning"
-    ? Clock
-    : CheckCircle;
+      ? Clock
+      : CheckCircle;
 };
 
 const navigateToPersonalKeys = () => {
@@ -269,7 +271,7 @@ const formatDate = (dateString) => {
             </div>
             <p class="text-xs text-gray-500 mt-4">
               {{ personalKeys.length }} personal,
-              {{ assignedKeys.length }} assigned
+              {{ assignedKeys.filter((k) => k.daysLeft > 0).length }} assigned
             </p>
           </div>
 
@@ -527,7 +529,10 @@ const formatDate = (dateString) => {
                         Assigned Keys
                       </p>
                       <p class="text-xs text-gray-500">
-                        {{ assignedKeys.length }} keys
+                        {{
+                          assignedKeys.filter((k) => k.daysLeft > 0).length
+                        }}
+                        keys
                       </p>
                     </div>
                   </div>
@@ -613,8 +618,8 @@ const formatDate = (dateString) => {
                         key.status === 'critical'
                           ? 'bg-red-500'
                           : key.status === 'warning'
-                          ? 'bg-yellow-500'
-                          : 'bg-green-500',
+                            ? 'bg-yellow-500'
+                            : 'bg-green-500',
                       ]"
                     ></div>
                     <div class="flex-1 min-w-0">
