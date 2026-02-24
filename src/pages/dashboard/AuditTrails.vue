@@ -96,9 +96,7 @@ const uniqueCategories = computed(() => {
 // Unique action types
 const uniqueActionTypes = computed(() => {
   const actions = new Set(
-    auditTrails.value
-      .map((trail) => trail.action_type)
-      .filter((act) => act),
+    auditTrails.value.map((trail) => trail.action_type).filter((act) => act),
   );
   return Array.from(actions).sort();
 });
@@ -703,21 +701,26 @@ const applyFilters = async () => {
   try {
     refreshing.value = true;
     console.log("🔄 Applying filters and fetching data...");
-    
+
     // Build filter object
     const newFilters = {
       search: searchQuery.value || null,
       category: filterCategory.value !== "all" ? filterCategory.value : null,
-      action_type: filterActionType.value !== "all" ? filterActionType.value : null,
+      action_type:
+        filterActionType.value !== "all" ? filterActionType.value : null,
       status: filterStatus.value !== "all" ? filterStatus.value : null,
       from_date: filterStartDate.value || null,
       to_date: filterEndDate.value || null,
-      affected_user_id: filterAffectedUser.value ? parseInt(filterAffectedUser.value) : null,
-      affected_system_id: filterAffectedSystem.value ? parseInt(filterAffectedSystem.value) : null,
+      affected_user_id: filterAffectedUser.value
+        ? parseInt(filterAffectedUser.value)
+        : null,
+      affected_system_id: filterAffectedSystem.value
+        ? parseInt(filterAffectedSystem.value)
+        : null,
       per_page: pagination.value.per_page,
-      page: 1
+      page: 1,
     };
-    
+
     setFilters(newFilters);
     await fetchAuditTrails();
     success("Filters applied");
@@ -742,7 +745,7 @@ const clearFilters = async () => {
     filterActionType.value = "all";
     filterAffectedUser.value = "";
     filterAffectedSystem.value = "";
-    
+
     resetFilters();
     await fetchAuditTrails();
     success("Filters cleared");
@@ -829,14 +832,11 @@ const refreshAuditTrails = async () => {
 };
 
 // Watch for filter changes and refetch
-watch(
-  [() => filters.value.page],
-  async () => {
-    if (filters.value.page !== 1) {
-      await fetchAuditTrails();
-    }
+watch([() => filters.value.page], async () => {
+  if (filters.value.page !== 1) {
+    await fetchAuditTrails();
   }
-);
+});
 
 // Initialize on component mount
 onMounted(async () => {
@@ -1244,8 +1244,7 @@ onMounted(async () => {
 
           <!-- Results count (only show when not using pagination) -->
           <div class="text-sm text-gray-600" v-if="totalPages <= 1">
-            Showing {{ paginatedTrails.length }} of
-            {{ totalItems }} activities
+            Showing {{ paginatedTrails.length }} of {{ totalItems }} activities
           </div>
 
           <!-- Table -->

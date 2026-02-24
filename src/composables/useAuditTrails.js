@@ -35,13 +35,13 @@ export const useAuditTrails = () => {
    */
   const buildQueryParams = () => {
     const params = new URLSearchParams()
-    
+
     Object.entries(filters.value).forEach(([key, value]) => {
       if (value !== null && value !== '' && value !== undefined) {
         params.append(key, value)
       }
     })
-    
+
     return params.toString()
   }
 
@@ -52,13 +52,13 @@ export const useAuditTrails = () => {
     loading.value = true
     try {
       console.log('📥 Fetching audit trails with filters:', filters.value)
-      
+
       const endpoint = API_ENDPOINTS.AUDIT_TRAILS.LIST
       const queryParams = buildQueryParams()
       const url = queryParams ? `${endpoint}?${queryParams}` : endpoint
-      
+
       const response = await apiClient.get(url)
-      
+
       auditTrails.value = response.data?.data || []
       pagination.value = response.data?.pagination || {
         total: auditTrails.value.length,
@@ -66,7 +66,7 @@ export const useAuditTrails = () => {
         current_page: filters.value.page,
         last_page: Math.ceil(auditTrails.value.length / filters.value.per_page)
       }
-      
+
       console.log('✅ Audit trails loaded:', auditTrails.value.length)
     } catch (err) {
       console.error('❌ Error fetching audit trails:', err)
@@ -99,10 +99,10 @@ export const useAuditTrails = () => {
     try {
       console.log(`📥 Fetching audit trails for user ${userId}...`)
       const queryParams = buildQueryParams()
-      const url = queryParams 
+      const url = queryParams
         ? `${API_ENDPOINTS.AUDIT_TRAILS.BY_USER(userId)}?${queryParams}`
         : API_ENDPOINTS.AUDIT_TRAILS.BY_USER(userId)
-      
+
       const response = await apiClient.get(url)
       console.log('✅ User audit trails loaded:', response.data.data.length)
       return response.data
@@ -119,10 +119,10 @@ export const useAuditTrails = () => {
     try {
       console.log('📥 Fetching password access logs...')
       const queryParams = buildQueryParams()
-      const url = queryParams 
+      const url = queryParams
         ? `${API_ENDPOINTS.AUDIT_TRAILS.PASSWORD_ACCESS_LOGS}?${queryParams}`
         : API_ENDPOINTS.AUDIT_TRAILS.PASSWORD_ACCESS_LOGS
-      
+
       const response = await apiClient.get(url)
       console.log('✅ Password access logs loaded:', response.data.data.length)
       return response.data
@@ -142,7 +142,7 @@ export const useAuditTrails = () => {
       const url = queryParams
         ? `${API_ENDPOINTS.AUDIT_TRAILS.PERMISSION_LOGS}?${queryParams}`
         : API_ENDPOINTS.AUDIT_TRAILS.PERMISSION_LOGS
-      
+
       const response = await apiClient.get(url)
       console.log('✅ Permission logs loaded:', response.data.data.length)
       return response.data
@@ -162,7 +162,7 @@ export const useAuditTrails = () => {
       const url = queryParams
         ? `${API_ENDPOINTS.AUDIT_TRAILS.KEY_ACCESS_LOGS}?${queryParams}`
         : API_ENDPOINTS.AUDIT_TRAILS.KEY_ACCESS_LOGS
-      
+
       const response = await apiClient.get(url)
       console.log('✅ Key access logs loaded:', response.data.data.length)
       return response.data
@@ -182,7 +182,7 @@ export const useAuditTrails = () => {
       const url = queryParams
         ? `${API_ENDPOINTS.AUDIT_TRAILS.ADMIN_ACTIVITY_LOGS}?${queryParams}`
         : API_ENDPOINTS.AUDIT_TRAILS.ADMIN_ACTIVITY_LOGS
-      
+
       const response = await apiClient.get(url)
       console.log('✅ Admin activity logs loaded:', response.data.data.length)
       return response.data
@@ -256,7 +256,7 @@ export const useAuditTrails = () => {
       const url = queryParams
         ? `${API_ENDPOINTS.AUDIT_TRAILS.EXPORT}?${queryParams}`
         : API_ENDPOINTS.AUDIT_TRAILS.EXPORT
-      
+
       window.location.href = url
       console.log('✅ Export initiated')
     } catch (err) {
