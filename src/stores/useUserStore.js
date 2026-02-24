@@ -119,7 +119,8 @@ export const useUserStore = defineStore('user', () => {
         error.value = null
         try {
             const { data } = await apiClient.get(API_ENDPOINTS.USERS.LIST, { params })
-            users.value = data || []
+            // Extract users array from response { data: [...], pagination: {...} }
+            users.value = data.data || []
             return data
         } catch (err) {
             error.value = err.message || 'Failed to fetch users'
@@ -135,7 +136,8 @@ export const useUserStore = defineStore('user', () => {
         error.value = null
         try {
             const { data } = await apiClient.get(API_ENDPOINTS.USERS.SEARCH, { params: searchParams })
-            return data
+            // Return data array if response has { data: [...], pagination: {...} } structure
+            return data.data || data || []
         } catch (err) {
             error.value = err.message || 'Search failed'
             throw err
