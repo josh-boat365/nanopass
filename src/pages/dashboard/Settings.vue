@@ -28,15 +28,18 @@ const activeTab = ref("profile");
 
 // Profile Data
 const userProfile = ref({
+  firstName: "",
+  surname: "",
   username: "",
   email: "",
   department: "",
   privilege: "",
-  createdAt: "",
 });
 
 // Profile Form
 const profileFormData = ref({
+  firstName: "",
+  surname: "",
   username: "",
   email: "",
   department: "",
@@ -82,7 +85,7 @@ const loadDepartments = async () => {
 const getDepartmentName = (departmentId) => {
   if (!departmentId) return "";
   const dept = departments.value.find((d) => d.id === departmentId);
-  return dept ? dept.department_name : "";
+  return dept ? dept.name : "";
 };
 
 // ========================================
@@ -96,14 +99,17 @@ const loadUserProfile = async () => {
     if (userStore.user) {
       const departmentName = getDepartmentName(userStore.user.department_id);
       userProfile.value = {
+        firstName: userStore.user.firstName || "",
+        surname: userStore.user.surname || "",
         username: userStore.user.username || "",
         email: userStore.user.email || "",
         department: departmentName || userStore.user.department || "",
         privilege: userStore.user.admin ? "Admin" : "User",
-        createdAt: userStore.user.created_at || "N/A",
       };
 
       profileFormData.value = {
+        firstName: userProfile.value.firstName,
+        surname: userProfile.value.surname,
         username: userProfile.value.username,
         email: userProfile.value.email,
         department: userProfile.value.department,
@@ -137,6 +143,8 @@ const fetchUserFromAPI = async () => {
 
     // Update store with fresh data
     if (userStore.user) {
+      userStore.user.firstName = userData.firstName || userStore.user.firstName;
+      userStore.user.surname = userData.surname || userStore.user.surname;
       userStore.user.username = userData.username || userStore.user.username;
       userStore.user.email = userData.email || userStore.user.email;
       userStore.user.department_id =
@@ -146,7 +154,7 @@ const fetchUserFromAPI = async () => {
 
     // Get department name from department_id
     const departmentName = getDepartmentName(
-      userData.department_id || userStore.user.department_id
+      userData.department_id || userStore.user.department_id,
     );
 
     // Update local profile data
@@ -178,10 +186,13 @@ const saveProfile = async () => {
 
   try {
     if (
+      !profileFormData.value.firstName.trim() ||
+      !profileFormData.value.surname.trim() ||
       !profileFormData.value.username.trim() ||
       !profileFormData.value.email.trim()
     ) {
-      profileError.value = "Username and email are required";
+      profileError.value =
+        "First name, last name, username and email are required";
       profileLoading.value = false;
       return;
     }
@@ -198,6 +209,8 @@ const saveProfile = async () => {
     console.log("Updating profile at:", endpoint);
 
     const response = await apiClient.put(endpoint, {
+      firstName: profileFormData.value.firstName,
+      surname: profileFormData.value.surname,
       username: profileFormData.value.username,
       email: profileFormData.value.email,
       department: profileFormData.value.department,
@@ -333,17 +346,6 @@ const resetPasswordForm = () => {
   showConfirmPassword.value = false;
   passwordError.value = "";
 };
-
-// Format date to human-readable format
-const formatDate = (dateStr) => {
-  if (!dateStr || dateStr === "N/A") return "N/A";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-};
 </script>
 
 <template>
@@ -395,6 +397,14 @@ const formatDate = (dateStr) => {
             Profile Information
           </h2>
 
+          <!-- Full Name Display -->
+          <div class="mb-6 p-4 bg-blue-50 rounded-md border border-blue-200">
+            <p class="text-sm text-blue-600 mb-2">Full Name</p>
+            <p class="text-lg font-semibold text-gray-900">
+              {{ profileFormData.firstName }} {{ profileFormData.surname }}
+            </p>
+          </div>
+
           <div
             v-if="profileError"
             class="mb-6 rounded-lg bg-red-50 border border-red-200 p-4"
@@ -407,6 +417,38 @@ const formatDate = (dateStr) => {
 
           <div class="grid gap-6 md:grid-cols-2">
             <!-- Editable Fields -->
+            <div>
+              <label
+                for="firstName"
+                class="block text-sm font-medium text-gray-900 mb-2"
+              >
+                First Name
+              </label>
+              <input
+                id="firstName"
+                v-model="profileFormData.firstName"
+                type="text"
+                :disabled="profileLoading"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label
+                for="surname"
+                class="block text-sm font-medium text-gray-900 mb-2"
+              >
+                Last Name
+              </label>
+              <input
+                id="surname"
+                v-model="profileFormData.surname"
+                type="text"
+                :disabled="profileLoading"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
+            </div>
+
             <div>
               <label
                 for="username"
@@ -473,17 +515,6 @@ const formatDate = (dateStr) => {
                 >
                   {{ userProfile.privilege }}
                 </span>
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Account Created
-              </label>
-              <div
-                class="px-4 py-2 bg-gray-50 rounded-md border border-gray-200 text-gray-900 text-sm font-medium"
-              >
-                {{ formatDate(userProfile.createdAt) }}
               </div>
             </div>
           </div>
