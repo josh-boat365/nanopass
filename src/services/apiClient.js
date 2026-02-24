@@ -18,13 +18,18 @@ apiClient.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
         }
 
-        // You can also add other headers here if needed
-        // config.headers['X-Custom-Header'] = 'value';
+        // Log request for debugging
+        console.log(`📤 API Request: ${config.method.toUpperCase()} ${config.url}`, {
+            baseURL: config.baseURL,
+            data: config.data,
+            headers: config.headers
+        });
 
         return config;
     },
     (error) => {
         // Handle request errors
+        console.error('❌ Request Error:', error);
         return Promise.reject(error);
     }
 );
@@ -56,33 +61,38 @@ apiClient.interceptors.response.use(
                 // Use store to clear authentication data
                 const userStore = useUserStore();
 
-                // Clear authentication data using store
-                userStore.logout();
+                // Log the logout reason
+                console.warn('🔒 Session expired or unauthorized, logging out...');
 
-                // Force page reload to restart the application from the login page
-                // This ensures the router properly initializes without any cached state
-                window.location.href = `${basePath}`;
+                // Clear authentication data using store
+                await userStore.logout();
+
+                // Redirect to login page (don't do full page reload to prevent loops)
+                window.location.href = `${basePath}login`;
             }
             // If on login page or verify endpoints, just let the error propagate to the component
         }
 
         // Handle 403 Forbidden errors
         if (error.response?.status === 403) {
-            console.error('Access forbidden:', error.response.data);
+            console.error('❌ Access forbidden:', error.response.data);
             // Redirect to 404 page for forbidden resources
             // window.location.href = `${import.meta.env.BASE_URL}error/404`;
         }
 
         // Handle 404 Not Found errors
         if (error.response?.status === 404) {
-            console.error('Resource not found:', error.response.data);
+            console.error('❌ Resource not found:', error.response.data);
             // Redirect to 404 error page
             // window.location.href = `${import.meta.env.BASE_URL}error/404`;
         }
 
         // Handle 500 Server errors
         if (error.response?.status === 500) {
-            console.error('Server error:', error.response.data);
+            console.error('❌ Server error (500):', error.response.data);
+            console.error('📋 Full response:', error.response);
+            console.error('🔗 Request URL:', error.config?.url);
+            console.error('📤 Request data:', error.config?.data);
             // Redirect to 500 error page
             // window.location.href = `${import.meta.env.BASE_URL}error/500`;
         }
