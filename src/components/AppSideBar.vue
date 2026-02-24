@@ -121,7 +121,9 @@ const data = computed(() => {
 
   return {
     user: {
-      name: user.value?.username || "NanoPass User",
+      firstName: user.value?.firstName || "",
+      surname: user.value?.surname || "",
+      username: user.value?.username,
       email: user.value?.email || "testuser@nanopass.com",
       avatar: "../assets/icons/codesandbox.svg",
     },
