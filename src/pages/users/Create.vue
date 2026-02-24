@@ -15,13 +15,10 @@ import {
 import BaseLayout from "@/layouts/AppLayout.vue";
 import { storeToRefs } from "pinia";
 import { useUserStore } from "@/stores/useUserStore";
-import { useDepartmentStore } from "@/stores/useDepartmentStore";
 import { useToast } from "@/composables/useToast";
 
 const userStore = useUserStore();
-const departmentStore = useDepartmentStore();
 const { user, users, loading, error } = storeToRefs(userStore);
-const { departments } = storeToRefs(departmentStore);
 const { success, error: showError } = useToast();
 
 // State management
@@ -45,17 +42,18 @@ const transferringAdmin = ref(false);
 
 // Form data
 const formData = ref({
-  username: "",
+  firstName: "",
+  surname: "",
   email: "",
+  username: "",
+  empRole: "",
   password: "",
   password_confirmation: "",
-  department_id: null,
 });
 
 // Load users on component mount
 onMounted(async () => {
   await loadUsers();
-  await loadDepartments();
   await loadCurrentAdmin();
 });
 
@@ -76,15 +74,6 @@ const loadUsers = async () => {
   }
 };
 
-// Load all departments
-const loadDepartments = async () => {
-  try {
-    await departmentStore.getAllDepartments();
-  } catch (err) {
-    console.error("Error loading departments:", err);
-  }
-};
-
 // Load current admin
 const loadCurrentAdmin = async () => {
   try {
@@ -95,11 +84,6 @@ const loadCurrentAdmin = async () => {
   }
 };
 
-// Computed: Non-admin users for transfer selection
-const nonAdminUsers = computed(() => {
-  return users.value.filter((u) => !u.admin && u.id !== user.value?.id);
-});
-
 // Computed filtered users based on search
 const filteredUsers = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -107,9 +91,12 @@ const filteredUsers = computed(() => {
   }
   const query = searchQuery.value.toLowerCase();
   return users.value.filter(
-    (user) =>
-      user.username?.toLowerCase().includes(query) ||
-      user.email?.toLowerCase().includes(query),
+    (u) =>
+      u.firstName?.toLowerCase().includes(query) ||
+      u.surname?.toLowerCase().includes(query) ||
+      u.email?.toLowerCase().includes(query) ||
+      u.username?.toLowerCase().includes(query) ||
+      u.empRole?.toLowerCase().includes(query),
   );
 });
 
@@ -171,11 +158,13 @@ const togglePasswordVisibility = (userId) => {
 // Open Add Modal
 const openAddModal = () => {
   formData.value = {
-    username: "",
+    firstName: "",
+    surname: "",
     email: "",
+    username: "",
+    empRole: "",
     password: "",
     password_confirmation: "",
-    department_id: null,
   };
   successMessage.value = "";
   userStore.clearError();
@@ -186,11 +175,13 @@ const openAddModal = () => {
 const closeAddModal = () => {
   showAddModal.value = false;
   formData.value = {
-    username: "",
+    firstName: "",
+    surname: "",
     email: "",
+    username: "",
+    empRole: "",
     password: "",
     password_confirmation: "",
-    department_id: null,
   };
   successMessage.value = "";
   userStore.clearError();
@@ -203,11 +194,13 @@ const openEditModal = async (userToEdit) => {
 
     selectedUser.value = userData;
     formData.value = {
-      username: userData.username || "",
+      firstName: userData.firstName || "",
+      surname: userData.surname || "",
       email: userData.email || "",
+      username: userData.username || "",
+      empRole: userData.empRole || "",
       password: "",
       password_confirmation: "",
-      department_id: userData.department_id || null,
     };
     successMessage.value = "";
     userStore.clearError();
@@ -222,11 +215,13 @@ const closeEditModal = () => {
   showEditModal.value = false;
   selectedUser.value = null;
   formData.value = {
-    username: "",
+    firstName: "",
+    surname: "",
     email: "",
+    username: "",
+    empRole: "",
     password: "",
     password_confirmation: "",
-    department_id: null,
   };
   successMessage.value = "";
   userStore.clearError();
@@ -250,11 +245,17 @@ const closeDeleteModal = () => {
 
 // Validate form
 const validateForm = () => {
-  if (!formData.value.username.trim()) {
-    return "Username is required";
+  if (!formData.value.firstName.trim()) {
+    return "First name is required";
+  }
+  if (!formData.value.surname.trim()) {
+    return "Surname is required";
   }
   if (!formData.value.email.trim()) {
     return "Email is required";
+  }
+  if (!formData.value.username.trim()) {
+    return "Username is required";
   }
   if (!showEditModal.value && !formData.value.password.trim()) {
     return "Password is required";
@@ -284,11 +285,13 @@ const addUser = async () => {
     userStore.clearError();
 
     const userData = {
-      username: formData.value.username,
+      firstName: formData.value.firstName,
+      surname: formData.value.surname,
       email: formData.value.email,
+      username: formData.value.username,
+      empRole: formData.value.empRole,
       password: formData.value.password,
       password_confirmation: formData.value.password_confirmation,
-      department_id: formData.value.department_id,
     };
 
     await userStore.createUser(userData);
@@ -320,9 +323,11 @@ const updateUser = async () => {
     userStore.clearError();
 
     const userData = {
-      username: formData.value.username,
+      firstName: formData.value.firstName,
+      surname: formData.value.surname,
       email: formData.value.email,
-      department_id: formData.value.department_id,
+      username: formData.value.username,
+      empRole: formData.value.empRole,
     };
 
     if (formData.value.password.trim()) {
@@ -365,36 +370,30 @@ const deleteUser = async () => {
   }
 };
 
-// Mask password for display
+// Mask password for display (not needed since passwords aren't displayed in list)
 const maskPassword = (password) => {
-  return password ? "*".repeat(password.length) : "";
+  return password ? "*".repeat(Math.max(password.length, 3)) : "";
 };
 
-// Get privilege badge color
-const getPrivilegeBadgeColor = (privilege) => {
-  if (!privilege) return "bg-gray-100 text-gray-800";
-
-  const privilegeLower = privilege.toLowerCase();
-  if (privilegeLower === "admin") return "bg-red-100 text-red-800";
-  if (privilegeLower === "editor") return "bg-yellow-100 text-yellow-800";
-  return "bg-green-100 text-green-800";
+// Get admin badge color
+const getAdminBadgeColor = (isAdmin) => {
+  return isAdmin ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800";
 };
 
-// Get user display name
+// Get user display name (full name)
 const getUserDisplayName = (user) => {
-  return user.username || user.email;
-};
-
-// Get department name by ID
-const getDepartmentName = (departmentId) => {
-  if (!departmentId) return null;
-  const dept = departments.value.find((d) => d.id === departmentId);
-  return dept ? dept.department_name : null;
+  const fullName = `${user.firstName || ""} ${user.surname || ""}`.trim();
+  return fullName || user.username || user.email;
 };
 
 // ========================================
 // ADMIN TRANSFER FUNCTIONS
 // ========================================
+
+// Computed: Non-admin users for transfer selection
+const nonAdminUsers = computed(() => {
+  return users.value.filter((u) => !u.admin && u.id !== user.value?.id);
+});
 
 // Open Transfer Admin Modal
 const openTransferAdminModal = () => {
@@ -505,7 +504,7 @@ const handleTransferAdmin = async () => {
             v-model="searchQuery"
             @input="handleSearch"
             type="text"
-            placeholder="Search users by name or email..."
+            placeholder="Search by name, email, username, or role..."
             class="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
           />
         </div>
@@ -544,12 +543,12 @@ const handleTransferAdmin = async () => {
                 <th
                   class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
                 >
-                  Department
+                  Role
                 </th>
                 <th
-                  class="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
+                  class="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
                 >
-                  Role
+                  Status
                 </th>
                 <th
                   class="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide"
@@ -579,16 +578,16 @@ const handleTransferAdmin = async () => {
                 </td>
                 <td class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm">
                   <span
-                    v-if="getDepartmentName(user.department_id)"
+                    v-if="user.empRole"
                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                   >
-                    {{ getDepartmentName(user.department_id) }}
+                    {{ user.empRole }}
                   </span>
                   <span v-else class="text-gray-400 text-xs"
-                    >No department</span
+                    >Not specified</span
                   >
                 </td>
-                <td class="hidden md:table-cell px-4 sm:px-6 py-4 text-sm">
+                <td class="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm">
                   <span
                     :class="[
                       'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
@@ -761,6 +760,38 @@ const handleTransferAdmin = async () => {
 
         <!-- Modal Body -->
         <form @submit.prevent="addUser" class="px-4 sm:px-6 py-4 space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label
+                for="add-firstName"
+                class="block text-sm font-medium text-gray-900 mb-1"
+                >First Name *</label
+              >
+              <input
+                id="add-firstName"
+                v-model="formData.firstName"
+                type="text"
+                placeholder="Enter first name"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label
+                for="add-surname"
+                class="block text-sm font-medium text-gray-900 mb-1"
+                >Surname *</label
+              >
+              <input
+                id="add-surname"
+                v-model="formData.surname"
+                type="text"
+                placeholder="Enter surname"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+          </div>
           <div>
             <label
               for="add-username"
@@ -771,7 +802,7 @@ const handleTransferAdmin = async () => {
               id="add-username"
               v-model="formData.username"
               type="text"
-              placeholder="Enter username"
+              placeholder="Enter username or email"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
@@ -788,6 +819,20 @@ const handleTransferAdmin = async () => {
               type="email"
               placeholder="Enter email address"
               required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label
+              for="add-empRole"
+              class="block text-sm font-medium text-gray-900 mb-1"
+              >Employee Role</label
+            >
+            <input
+              id="add-empRole"
+              v-model="formData.empRole"
+              type="text"
+              placeholder="e.g., IT System Developer"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
@@ -820,27 +865,6 @@ const handleTransferAdmin = async () => {
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
-          </div>
-          <div>
-            <label
-              for="add-department"
-              class="block text-sm font-medium text-gray-900 mb-1"
-              >Department</label
-            >
-            <select
-              id="add-department"
-              v-model="formData.department_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            >
-              <option :value="null">Select a department</option>
-              <option
-                v-for="dept in departments"
-                :key="dept.id"
-                :value="dept.id"
-              >
-                {{ dept.department_name }}
-              </option>
-            </select>
           </div>
 
           <!-- Modal Footer -->
@@ -897,6 +921,38 @@ const handleTransferAdmin = async () => {
 
         <!-- Modal Body -->
         <form @submit.prevent="updateUser" class="px-4 sm:px-6 py-4 space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label
+                for="edit-firstName"
+                class="block text-sm font-medium text-gray-900 mb-1"
+                >First Name *</label
+              >
+              <input
+                id="edit-firstName"
+                v-model="formData.firstName"
+                type="text"
+                placeholder="Enter first name"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label
+                for="edit-surname"
+                class="block text-sm font-medium text-gray-900 mb-1"
+                >Surname *</label
+              >
+              <input
+                id="edit-surname"
+                v-model="formData.surname"
+                type="text"
+                placeholder="Enter surname"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+          </div>
           <div>
             <label
               for="edit-username"
@@ -907,7 +963,7 @@ const handleTransferAdmin = async () => {
               id="edit-username"
               v-model="formData.username"
               type="text"
-              placeholder="Enter username"
+              placeholder="Enter username or email"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
@@ -924,6 +980,20 @@ const handleTransferAdmin = async () => {
               type="email"
               placeholder="Enter email address"
               required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label
+              for="edit-empRole"
+              class="block text-sm font-medium text-gray-900 mb-1"
+              >Employee Role</label
+            >
+            <input
+              id="edit-empRole"
+              v-model="formData.empRole"
+              type="text"
+              placeholder="e.g., IT System Developer"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
@@ -954,27 +1024,6 @@ const handleTransferAdmin = async () => {
               placeholder="Re-enter new password"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
-          </div>
-          <div>
-            <label
-              for="edit-department"
-              class="block text-sm font-medium text-gray-900 mb-1"
-              >Department</label
-            >
-            <select
-              id="edit-department"
-              v-model="formData.department_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            >
-              <option :value="null">Select a department</option>
-              <option
-                v-for="dept in departments"
-                :key="dept.id"
-                :value="dept.id"
-              >
-                {{ dept.department_name }}
-              </option>
-            </select>
           </div>
 
           <!-- Admin Status Info -->
