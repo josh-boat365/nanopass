@@ -3,10 +3,31 @@
 import { ref, computed } from 'vue'
 import apiClient from '@/services/apiClient'
 import { API_ENDPOINTS } from '@/config/apiConfig'
+import { useUserStore } from '@/stores/useUserStore'
 
 const notifications = ref([])
 const loading = ref(false)
 let pollInterval = null
+
+// Notification types enum
+export const NOTIFICATION_TYPES = {
+    ASSIGNMENT: 'assignment',
+    REVOCATION: 'revocation',
+    EXTENSION: 'extension',
+    DELETION: 'deletion',
+    PASSWORD_UPDATE: 'password_update',
+    SYSTEM_ALERT: 'system_alert',
+}
+
+// Map notification types to human-readable labels
+const notificationTypeLabels = {
+    [NOTIFICATION_TYPES.ASSIGNMENT]: 'Access Granted',
+    [NOTIFICATION_TYPES.REVOCATION]: 'Access Revoked',
+    [NOTIFICATION_TYPES.EXTENSION]: 'Access Extended',
+    [NOTIFICATION_TYPES.DELETION]: 'Access Removed',
+    [NOTIFICATION_TYPES.PASSWORD_UPDATE]: 'Password Updated',
+    [NOTIFICATION_TYPES.SYSTEM_ALERT]: 'System Alert',
+}
 
 export function useNotifications() {
     /**
@@ -167,6 +188,21 @@ export function useNotifications() {
         return grouped
     })
 
+    /**
+     * Get human-readable label for notification type
+     */
+    const getNotificationTypeLabel = (type) => {
+        return notificationTypeLabels[type] || type
+    }
+
+    /**
+     * Computed: Check if current user is admin
+     */
+    const userStore = useUserStore()
+    const isAdmin = computed(() => {
+        return userStore.user?.role === 'admin' || userStore.isAdmin || false
+    })
+
     return {
         notifications,
         loading,
@@ -178,6 +214,8 @@ export function useNotifications() {
         markAllAsRead,
         deleteNotification,
         startPolling,
-        stopPolling
+        stopPolling,
+        getNotificationTypeLabel,
+        isAdmin,
     }
 }
