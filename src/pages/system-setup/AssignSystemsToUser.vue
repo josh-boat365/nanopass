@@ -59,6 +59,11 @@ const getUserName = (userId) => {
   return user ? user.username : "Unknown User";
 };
 
+const getUserDisplayName = (user) => {
+  const fullName = `${user?.firstName || ""} ${user?.surname || ""}`.trim();
+  return fullName || user?.username || user?.email || "Unknown User";
+};
+
 const getSystemName = (systemId) => {
   const system = systems.value.find((s) => s.id === systemId);
   return system ? system.system_name : "Unknown System";
@@ -159,9 +164,10 @@ const groupedPermissions = computed(() => {
   filteredPermissions.value.forEach((perm) => {
     const userId = perm.user_id;
     if (!grouped[userId]) {
+      const user = users.value.find((u) => u.id === userId);
       grouped[userId] = {
         user_id: perm.user_id,
-        user_name: getUserName(perm.user_id),
+        user_name: getUserDisplayName(user) || getUserName(perm.user_id),
         systems: [],
       };
     }
@@ -207,41 +213,20 @@ const notifyAssignment = async (userId, assignedSystems) => {
       })
       .join(", ");
 
-    // Send notifications to user and admin
-    const userNotification = {
-      user_id: userId,
-      type: "assignment",
-      title: "Systems Assigned",
-      message: `You have been assigned to the following systems: ${systemNames}`,
-      read: false,
-      data: { systems: assignedSystems },
-    };
-
-    const adminNotification = {
-      type: "assignment",
-      title: "Systems Assigned to User",
-      message: `${user.username || user.email} has been assigned to the following systems: ${systemNames}`,
-      read: false,
-      data: {
-        user_id: userId,
-        user_email: user.email,
-        systems: assignedSystems,
-      },
-    };
-
+    // Notifications are created internally by backend when permissions are assigned
     console.log(
-      `📤 Sending notifications for user ${user.username || user.email}: ${systemNames}`,
+      `✅ Systems assigned for user ${user.username || user.email}: ${systemNames}. Backend will create notifications.`,
     );
 
-    const results = await Promise.allSettled([
-      apiClient.post("/notifications", userNotification),
-      apiClient.post("/notifications", adminNotification),
-    ]);
+    // Simulate fulfilled results for backward compatibility
+    const results = [{ status: "fulfilled" }, { status: "fulfilled" }];
 
     results.forEach((result, index) => {
       const type = index === 0 ? "user" : "admin";
       if (result.status === "fulfilled") {
-        console.log(`✅ ${type.toUpperCase()} notification sent successfully`);
+        console.log(
+          `ℹ️ ${type.toUpperCase()} notification will be created by backend`,
+        );
       } else {
         console.error(
           `❌ ${type.toUpperCase()} notification failed:`,
@@ -277,33 +262,20 @@ const notifyNewAssignments = async (userId, newSystemIds) => {
       })
       .join(", ");
 
-    const userNotification = {
-      user_id: userId,
-      type: "assignment",
-      title: "Access Duration Extended",
-      message: `You have been granted additional access to: ${systemNames}`,
-      read: false,
-      data: { systems: newSystemIds },
-    };
-
-    const adminNotification = {
-      type: "assignment",
-      title: "Access Duration Extended",
-      message: `${user.username || user.email} has been granted additional access to: ${systemNames}`,
-      read: false,
-      data: { user_id: userId, user_email: user.email, systems: newSystemIds },
-    };
-
-    console.log("📤 Sending new assignment notifications for:", user.email);
-    const results = await Promise.allSettled([
-      apiClient.post("/notifications", userNotification),
-      apiClient.post("/notifications", adminNotification),
-    ]);
+    // Notifications are created internally by backend when permissions are extended
+    console.log(
+      "✅ Access duration extended for:",
+      user.email,
+      ". Backend will create notifications.",
+    );
+    const results = [{ status: "fulfilled" }, { status: "fulfilled" }];
 
     results.forEach((result, index) => {
       const type = index === 0 ? "user" : "admin";
       if (result.status === "fulfilled") {
-        console.log(`✅ ${type.toUpperCase()} notification sent successfully`);
+        console.log(
+          `ℹ️ ${type.toUpperCase()} notification will be created by backend`,
+        );
       } else {
         console.error(
           `❌ ${type.toUpperCase()} notification failed:`,
@@ -349,38 +321,20 @@ const notifyAssignmentUpdate = async (
       day: "numeric",
     });
 
-    const userNotification = {
-      user_id: userId,
-      type: "assignment",
-      title: "Access Duration Updated",
-      message: `Your access to ${systemNames} has been updated. New expiry date: ${formattedDate}`,
-      read: false,
-      data: { systems: updatedSystemIds, new_expiry_date: newExpiryDate },
-    };
-
-    const adminNotification = {
-      type: "assignment",
-      title: "Access Duration Updated",
-      message: `${user.username || user.email}'s access to ${systemNames} has been updated. New expiry date: ${formattedDate}`,
-      read: false,
-      data: {
-        user_id: userId,
-        user_email: user.email,
-        systems: updatedSystemIds,
-        new_expiry_date: newExpiryDate,
-      },
-    };
-
-    console.log("📤 Sending assignment update notifications for:", user.email);
-    const results = await Promise.allSettled([
-      apiClient.post("/notifications", userNotification),
-      apiClient.post("/notifications", adminNotification),
-    ]);
+    // Notifications are created internally by backend when permissions are updated
+    console.log(
+      "✅ Access duration updated for:",
+      user.email,
+      ". Backend will create notifications.",
+    );
+    const results = [{ status: "fulfilled" }, { status: "fulfilled" }];
 
     results.forEach((result, index) => {
       const type = index === 0 ? "user" : "admin";
       if (result.status === "fulfilled") {
-        console.log(`✅ ${type.toUpperCase()} notification sent successfully`);
+        console.log(
+          `ℹ️ ${type.toUpperCase()} notification will be created by backend`,
+        );
       } else {
         console.error(
           `❌ ${type.toUpperCase()} notification failed:`,
@@ -441,8 +395,10 @@ const loadAllData = async () => {
 
 const loadUsers = async () => {
   try {
-    console.log("📥 Loading users from:", API_ENDPOINTS.USERS.LIST);
-    const response = await apiClient.get(API_ENDPOINTS.USERS.LIST);
+    // Load from users endpoint instead of employees
+    const endpoint = API_ENDPOINTS.USERS?.LIST || "/api/users";
+    console.log("📥 Loading users from:", endpoint);
+    const response = await apiClient.get(endpoint);
     const data = response.data.data || response.data || [];
     users.value = Array.isArray(data) ? data : [];
     console.log("✅ Users loaded:", users.value.length, "users");
@@ -1234,7 +1190,7 @@ const nextPage = () => {
             >
               <option :value="null" disabled>Choose a user...</option>
               <option v-for="user in users" :key="user.id" :value="user.id">
-                {{ user.username }} ({{ user.email }})
+                {{ getUserDisplayName(user) }} ({{ user.username }})
               </option>
             </select>
           </div>
