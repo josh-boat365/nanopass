@@ -10,87 +10,80 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  RefreshCw,
 } from "lucide-vue-next";
-import apiClient from "@/services/apiClient";
-import { API_ENDPOINTS } from "@/config/apiConfig";
 import { useToast } from "@/composables/useToast";
 import { useUserStore } from "@/stores/useUserStore";
+import { useAuditTrails } from "@/composables/useAuditTrails";
 import * as XLSX from "xlsx";
 
 const { success, error: showError } = useToast();
 const userStore = useUserStore();
+const {
+  auditTrails,
+  loading,
+  pagination,
+  filters,
+  fetchAuditTrails,
+  logKeyCopied,
+  logAdminReview,
+  exportAuditTrails,
+  setFilter,
+  setFilters,
+  resetFilters,
+  setPage,
+  setPerPage,
+} = useAuditTrails();
 
-// State management
+// Local UI state
 const searchQuery = ref("");
 const filterCategory = ref("all");
 const filterStatus = ref("all");
 const filterStartDate = ref("");
 const filterEndDate = ref("");
-const loading = ref(false);
-const currentPage = ref(1);
-const itemsPerPage = 20;
+const filterActionType = ref("all");
+const filterAffectedUser = ref("");
+const filterAffectedSystem = ref("");
+const showAdvancedFilters = ref(false);
+const refreshing = ref(false);
+const itemsPerPageOptions = [10, 25, 50, 100];
 
-// Audit trail data
-const auditTrails = ref([]);
-
-// Filtered trails with all filters applied
-const filteredTrails = computed(() => {
-  let results = auditTrails.value;
-
-  // Filter by search query (username, email, action description)
-  if (searchQuery.value.trim()) {
-    const query = searchQuery.value.toLowerCase();
-    results = results.filter(
-      (trail) =>
-        (trail.user?.username || "").toLowerCase().includes(query) ||
-        (trail.user?.email || "").toLowerCase().includes(query) ||
-        (trail.description || "").toLowerCase().includes(query) ||
-        (trail.ip_address || "").toLowerCase().includes(query),
-    );
-  }
-
-  // Filter by category
-  if (filterCategory.value !== "all") {
-    results = results.filter(
-      (trail) => trail.action_category === filterCategory.value,
-    );
-  }
-
-  // Filter by status
-  if (filterStatus.value !== "all") {
-    results = results.filter((trail) => trail.status === filterStatus.value);
-  }
-
-  // Filter by date range
-  if (filterStartDate.value) {
-    const startDate = new Date(filterStartDate.value);
-    results = results.filter(
-      (trail) => new Date(trail.created_at) >= startDate,
-    );
-  }
-
-  if (filterEndDate.value) {
-    const endDate = new Date(filterEndDate.value);
-    endDate.setHours(23, 59, 59, 999);
-    results = results.filter((trail) => new Date(trail.created_at) <= endDate);
-  }
-
-  return results;
-});
-
-// Paginated trails
+// Paginated trails (from API pagination)
 const paginatedTrails = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage;
-  const end = start + itemsPerPage;
-  return filteredTrails.value.slice(start, end);
+  return auditTrails.value;
 });
 
-// Total pages
+// Total pages from API
 const totalPages = computed(() => {
-  return Math.ceil(filteredTrails.value.length / itemsPerPage);
+  return pagination.value.last_page || 1;
 });
 
-// Unique categories from audit trails
+// Current page from API
+const currentPage = computed(() => {
+  return pagination.value.current_page || 1;
+});
+
+// Total items from API
+const totalItems = computed(() => {
+  return pagination.value.total || 0;
+});
+
+// Items per page from API
+const itemsPerPage = computed(() => {
+  return pagination.value.per_page || 20;
+});
+
+// Pagination info display
+const paginationInfo = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value + 1;
+  const end = Math.min(
+    currentPage.value * itemsPerPage.value,
+    totalItems.value,
+  );
+  return `${start}-${end} of ${totalItems.value}`;
+});
+
+// Unique categories from audit trails (from data received)
 const uniqueCategories = computed(() => {
   const categories = new Set(
     auditTrails.value
@@ -98,6 +91,16 @@ const uniqueCategories = computed(() => {
       .filter((cat) => cat),
   );
   return Array.from(categories).sort();
+});
+
+// Unique action types
+const uniqueActionTypes = computed(() => {
+  const actions = new Set(
+    auditTrails.value
+      .map((trail) => trail.action_type)
+      .filter((act) => act),
+  );
+  return Array.from(actions).sort();
 });
 
 // ========================================
@@ -655,15 +658,15 @@ const formatDate = (dateString) => {
   return `${day} - ${month} - ${year}, ${hours}:${minutes}${ampm}`;
 };
 
-// Export to Excel
+// Export to Excel (client-side fallback)
 const exportToExcel = () => {
   try {
-    if (filteredTrails.value.length === 0) {
+    if (auditTrails.value.length === 0) {
       showError("No data to export");
       return;
     }
 
-    const exportData = filteredTrails.value.map((trail) => ({
+    const exportData = auditTrails.value.map((trail) => ({
       Timestamp: formatDate(trail.created_at),
       User: `${trail.user?.username || "N/A"} (${trail.user?.email || "N/A"})`,
       "User Type": trail.user?.admin ? "Admin" : "User",
@@ -671,10 +674,7 @@ const exportToExcel = () => {
       Category: trail.action_category || "N/A",
       Status: getStatusDisplay(trail.status).label,
       "IP Address": trail.ip_address || "N/A",
-      "Operating System": getOperatingSystem(trail.user_agent),
-      Browser: getBrowser(trail.user_agent),
-      "Previous State": getPreviousChangeSummary(trail),
-      "Current State": getCurrentChangeSummary(trail),
+      Description: trail.description || "N/A",
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -692,42 +692,160 @@ const exportToExcel = () => {
 };
 
 // Fetch audit trails from backend
-const fetchAuditTrails = async () => {
-  loading.value = true;
+// ========================================
+// FILTER MANAGEMENT & API CALLS
+// ========================================
+
+/**
+ * Apply filters and fetch data from API
+ */
+const applyFilters = async () => {
   try {
-    console.log("📥 Fetching audit trails...");
-
-    const endpoint = API_ENDPOINTS.AUDIT_TRAILS?.LIST || "/audit-trails";
-    const response = await apiClient.get(endpoint);
-
-    const trailsData = response.data?.data || response.data || [];
-    auditTrails.value = Array.isArray(trailsData) ? trailsData : [];
-    console.log("✅ Audit trails loaded:", auditTrails.value.length);
+    refreshing.value = true;
+    console.log("🔄 Applying filters and fetching data...");
+    
+    // Build filter object
+    const newFilters = {
+      search: searchQuery.value || null,
+      category: filterCategory.value !== "all" ? filterCategory.value : null,
+      action_type: filterActionType.value !== "all" ? filterActionType.value : null,
+      status: filterStatus.value !== "all" ? filterStatus.value : null,
+      from_date: filterStartDate.value || null,
+      to_date: filterEndDate.value || null,
+      affected_user_id: filterAffectedUser.value ? parseInt(filterAffectedUser.value) : null,
+      affected_system_id: filterAffectedSystem.value ? parseInt(filterAffectedSystem.value) : null,
+      per_page: pagination.value.per_page,
+      page: 1
+    };
+    
+    setFilters(newFilters);
+    await fetchAuditTrails();
+    success("Filters applied");
   } catch (err) {
-    console.error("❌ Error fetching audit trails:", err);
-
-    if (err.response?.status === 404 || err.code === "ERR_NOT_FOUND") {
-      console.warn(
-        "Audit Trail API endpoint not yet implemented on backend. Using demo data instead.",
-      );
-      auditTrails.value = [];
-    }
+    console.error("❌ Error applying filters:", err);
+    showError("Failed to fetch audit trails");
   } finally {
-    loading.value = false;
+    refreshing.value = false;
   }
 };
 
-// Reset pagination when filters change
+/**
+ * Clear all filters
+ */
+const clearFilters = async () => {
+  try {
+    searchQuery.value = "";
+    filterCategory.value = "all";
+    filterStatus.value = "all";
+    filterStartDate.value = "";
+    filterEndDate.value = "";
+    filterActionType.value = "all";
+    filterAffectedUser.value = "";
+    filterAffectedSystem.value = "";
+    
+    resetFilters();
+    await fetchAuditTrails();
+    success("Filters cleared");
+  } catch (err) {
+    console.error("❌ Error clearing filters:", err);
+    showError("Failed to clear filters");
+  }
+};
+
+/**
+ * Change page
+ */
+const goToPage = async (page) => {
+  try {
+    setPage(page);
+    await fetchAuditTrails();
+  } catch (err) {
+    console.error("❌ Error changing page:", err);
+    showError("Failed to load page");
+  }
+};
+
+/**
+ * Change items per page
+ */
+const changeItemsPerPage = async (perPage) => {
+  try {
+    setPerPage(perPage);
+    setPage(1); // Reset to first page when changing per_page
+    await fetchAuditTrails();
+  } catch (err) {
+    console.error("❌ Error changing items per page:", err);
+    showError("Failed to change items per page");
+  }
+};
+
+/**
+ * Previous page
+ */
+const prevPage = async () => {
+  if (currentPage.value > 1) {
+    await goToPage(currentPage.value - 1);
+  }
+};
+
+/**
+ * Next page
+ */
+const nextPage = async () => {
+  if (currentPage.value < totalPages.value) {
+    await goToPage(currentPage.value + 1);
+  }
+};
+
+/**
+ * Export current filtered data to CSV
+ */
+const handleExport = async () => {
+  try {
+    console.log("📤 Exporting audit trails...");
+    await exportAuditTrails();
+    success("Export started");
+  } catch (err) {
+    console.error("❌ Error exporting:", err);
+    showError("Failed to export audit trails");
+  }
+};
+
+/**
+ * Refresh current view
+ */
+const refreshAuditTrails = async () => {
+  try {
+    refreshing.value = true;
+    console.log("🔄 Refreshing audit trails...");
+    await fetchAuditTrails();
+    success("Data refreshed");
+  } catch (err) {
+    console.error("❌ Error refreshing:", err);
+    showError("Failed to refresh data");
+  } finally {
+    refreshing.value = false;
+  }
+};
+
+// Watch for filter changes and refetch
 watch(
-  [searchQuery, filterCategory, filterStatus, filterStartDate, filterEndDate],
-  () => {
-    currentPage.value = 1;
-  },
+  [() => filters.value.page],
+  async () => {
+    if (filters.value.page !== 1) {
+      await fetchAuditTrails();
+    }
+  }
 );
 
 // Initialize on component mount
-onMounted(() => {
-  fetchAuditTrails();
+onMounted(async () => {
+  try {
+    await fetchAuditTrails();
+  } catch (err) {
+    console.error("❌ Error loading initial audit trails:", err);
+    showError("Failed to load audit trails");
+  }
 });
 </script>
 
@@ -1087,7 +1205,7 @@ onMounted(() => {
               <div class="flex items-end">
                 <button
                   @click="exportToExcel"
-                  :disabled="filteredTrails.length === 0"
+                  :disabled="auditTrails.length === 0"
                   class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download class="h-4 w-4" />
@@ -1124,10 +1242,10 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Results count -->
-          <div class="text-sm text-gray-600">
+          <!-- Results count (only show when not using pagination) -->
+          <div class="text-sm text-gray-600" v-if="totalPages <= 1">
             Showing {{ paginatedTrails.length }} of
-            {{ filteredTrails.length }} activities
+            {{ totalItems }} activities
           </div>
 
           <!-- Table -->
@@ -1299,34 +1417,92 @@ onMounted(() => {
 
           <!-- Pagination -->
           <div
-            class="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0 mt-4"
+            v-if="totalPages > 1"
+            class="border-t px-4 sm:px-6 py-4 bg-gray-50"
           >
             <div
-              class="text-xs sm:text-sm text-gray-600 w-full sm:w-auto text-center sm:text-left"
+              class="flex flex-col sm:flex-row items-center justify-between gap-4"
             >
-              Page {{ currentPage }} of {{ totalPages || 1 }}
-            </div>
+              <div class="flex items-center gap-2 text-sm text-gray-600">
+                <span>Show</span>
+                <select
+                  :value="itemsPerPage"
+                  @change="changeItemsPerPage(Number($event.target.value))"
+                  class="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black"
+                >
+                  <option
+                    v-for="option in itemsPerPageOptions"
+                    :key="option"
+                    :value="option"
+                  >
+                    {{ option }}
+                  </option>
+                </select>
+                <span>records</span>
+              </div>
 
-            <div
-              class="flex gap-2 w-full sm:w-auto justify-center sm:justify-end"
-            >
-              <button
-                @click="currentPage--"
-                :disabled="currentPage === 1"
-                class="inline-flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 bg-white text-gray-900 text-xs sm:text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft class="h-4 w-4" />
-                <span class="hidden xs:inline">Previous</span>
-              </button>
+              <div class="text-sm text-gray-600">
+                Showing {{ paginationInfo }}
+              </div>
 
-              <button
-                @click="currentPage++"
-                :disabled="currentPage === totalPages"
-                class="inline-flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 bg-white text-gray-900 text-xs sm:text-sm font-medium rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span class="hidden xs:inline">Next</span>
-                <ChevronRight class="h-4 w-4" />
-              </button>
+              <div class="flex items-center gap-2">
+                <button
+                  @click="prevPage"
+                  :disabled="currentPage === 1"
+                  :class="[
+                    'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                    currentPage === 1
+                      ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
+                  ]"
+                >
+                  <ChevronLeft class="h-4 w-4" />
+                  <span class="hidden sm:inline ml-1">Previous</span>
+                </button>
+
+                <div class="flex items-center gap-1">
+                  <template v-for="page in totalPages" :key="page">
+                    <button
+                      v-if="
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      "
+                      @click="goToPage(page)"
+                      :class="[
+                        'px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                        page === currentPage
+                          ? 'bg-black text-white'
+                          : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
+                      ]"
+                    >
+                      {{ page }}
+                    </button>
+                    <span
+                      v-else-if="
+                        page === currentPage - 2 || page === currentPage + 2
+                      "
+                      class="px-2 text-gray-500"
+                    >
+                      ...
+                    </span>
+                  </template>
+                </div>
+
+                <button
+                  @click="nextPage"
+                  :disabled="currentPage === totalPages"
+                  :class="[
+                    'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                    currentPage === totalPages
+                      ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50',
+                  ]"
+                >
+                  <span class="hidden sm:inline mr-1">Next</span>
+                  <ChevronRight class="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
