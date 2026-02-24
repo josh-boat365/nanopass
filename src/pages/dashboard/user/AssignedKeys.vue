@@ -859,7 +859,13 @@ const toggleUsernameVisibility = () => {
                   <td class="px-4 sm:px-6 py-4">
                     <button
                       @click="handleViewPassword(pwd)"
-                      class="inline-flex items-center gap-1 px-3 py-2 text-xs sm:text-sm font-medium text-white bg-black rounded-md hover:bg-gray-800 transition-colors"
+                      :disabled="getSystemToggleStatus(pwd) !== 'inuse'"
+                      :class="[
+                        'inline-flex items-center gap-1 px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors',
+                        getSystemToggleStatus(pwd) === 'inuse'
+                          ? 'text-white bg-black hover:bg-gray-800'
+                          : 'text-gray-400 bg-gray-200 cursor-not-allowed',
+                      ]"
                     >
                       <Eye class="h-4 w-4" />
                       <span class="hidden sm:inline">View</span>
