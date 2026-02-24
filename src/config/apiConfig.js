@@ -1,7 +1,7 @@
 // src/config/apiConfig.js
 
-const API_BASE_URL = 'http://192.168.1.200/nanopass-backend/public/api';
-// const API_BASE_URL = 'http://nanopass-backend.test/api';
+// const API_BASE_URL = 'http://192.168.1.200/nanopass-backend/public/api';
+const API_BASE_URL = 'http://nanopass-backend.test/api';
 
 const API_ENDPOINTS = {
     // Auth endpoints
@@ -124,10 +124,11 @@ const API_ENDPOINTS = {
         RECENT_ACTIVITY: '/audit-trails/recent-activity',
         PASSWORD_ACCESS_LOGS: '/audit-trails/password-access-logs',
         PERMISSION_LOGS: '/audit-trails/permission-logs',
-        PERSONAL_KEY_ACCESS_LOGS: '/audit-trails/personal-key-access-logs',
-        ADMIN_ACTIVITY: '/audit-trails/admin-activity',
+        KEY_ACCESS_LOGS: '/audit-trails/key-access-logs',
+        ADMIN_ACTIVITY_LOGS: '/audit-trails/admin-activity-logs',
+        LOG_KEY_COPIED: '/audit-trails/log-key-copied',
+        LOG_ADMIN_REVIEW: '/audit-trails/log-admin-review',
         EXPORT: '/audit-trails/export',
-        STATISTICS: '/audit-trails/statistics',
     },
 
     // Notification endpoints
