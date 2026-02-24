@@ -5,6 +5,7 @@ import { useRouter } from "vue-router";
 import MicrosoftIcon from "@/components/icons/MicrosoftIcon.vue";
 import { useUserStore } from "@/stores/useUserStore";
 import { useToast } from "@/composables/useToast";
+import { Eye, EyeOff } from "lucide-vue-next";
 
 const router = useRouter();
 const { success, error } = useToast();
@@ -12,6 +13,11 @@ const userStore = useUserStore();
 
 const username = ref("");
 const password = ref("");
+const showPassword = ref(false);
+
+const togglePasswordVisibility = () => {
+  showPassword.value = !showPassword.value;
+};
 
 // Loading and error states
 const loading = ref(false);
@@ -192,24 +198,37 @@ const handleMicrosoftLogin = () => {
                   Forgot your password?
                 </a>
               </div>
-              <input
-                id="password"
-                v-model="password"
-                type="password"
-                placeholder="Enter your password"
-                :disabled="loading"
-                :class="{
-                  'border-red-500':
-                    errors.password || validateField('password'),
-                  'border-gray-300': !(
-                    errors.password || validateField('password')
-                  ),
-                }"
-                @blur="handleBlur('password')"
-                @keyup.enter="handleLogin"
-                class="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                required
-              />
+              <div class="relative">
+                <input
+                  id="password"
+                  v-model="password"
+                  :type="showPassword ? 'text' : 'password'"
+                  placeholder="Enter your password"
+                  :disabled="loading"
+                  :class="{
+                    'border-red-500':
+                      errors.password || validateField('password'),
+                    'border-gray-300': !(
+                      errors.password || validateField('password')
+                    ),
+                  }"
+                  @blur="handleBlur('password')"
+                  @keyup.enter="handleLogin"
+                  class="w-full px-3 py-2 border rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed pr-10"
+                  required
+                />
+                <button
+                  type="button"
+                  @click="togglePasswordVisibility"
+                  class="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                  tabindex="-1"
+                >
+                  <component
+                    :is="showPassword ? EyeOff : Eye"
+                    class="w-5 h-5"
+                  />
+                </button>
+              </div>
               <p v-if="validateField('password')" class="text-xs text-red-600">
                 {{ validateField("password") }}
               </p>
