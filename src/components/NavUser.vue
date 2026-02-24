@@ -10,7 +10,7 @@ const router = useRouter();
 const userStore = useUserStore();
 const { success, error } = useToast();
 
-defineProps({
+const props = defineProps({
   user: Object,
   isCollapsed: Boolean,
 });
@@ -41,6 +41,27 @@ const handleClickOutside = (event) => {
   }
 };
 
+// Compute full name from firstName and surname (same as Create.vue)
+const getFullName = () => {
+  const fullName =
+    `${props.user?.firstName || ""} ${props.user?.surname || ""}`.trim();
+  return fullName || props.user?.username || props.user?.email || "User";
+};
+
+// Get initials from firstName and surname
+const getInitials = () => {
+  const first = (props.user?.firstName || "").substring(0, 1).toUpperCase();
+  const last = (props.user?.surname || "").substring(0, 1).toUpperCase();
+  return first + last || "U";
+};
+// Extract username from email (jnboateng@bestpointgh.com -> jnboateng)
+const getUsername = () => {
+  const username = props.user?.username;
+  if (username && username.includes("@")) {
+    return username.split("@")[0];
+  }
+  return username || "user";
+};
 onMounted(() => {
   document.addEventListener("click", handleClickOutside);
 });
@@ -58,19 +79,19 @@ onUnmounted(() => {
         'group relative flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50',
         isCollapsed ? 'justify-center' : '',
       ]"
-      :aria-label="user.name"
+      :aria-label="getFullName()"
     >
       <div
         class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-200 text-sm font-semibold"
       >
-        {{ user.name.substring(0, 2).toUpperCase() }}
+        {{ getInitials() }}
       </div>
       <div
         v-show="!isCollapsed"
         class="flex-1 text-left text-sm transition-all duration-200"
       >
-        <div class="font-medium text-gray-900">{{ user.name }}</div>
-        <div class="text-xs text-gray-500">{{ user.email }}</div>
+        <div class="font-medium text-gray-900">{{ getFullName() }}</div>
+        <div class="text-xs text-gray-500">{{ props.user.email }}</div>
       </div>
       <ChevronsUpDown v-show="!isCollapsed" class="h-4 w-4 text-gray-500" />
 
@@ -80,7 +101,7 @@ onUnmounted(() => {
         role="tooltip"
         class="pointer-events-none absolute left-full top-1/2 z-50 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white shadow-lg group-hover:block group-focus:block"
       >
-        {{ user.name }}
+        {{ getFullName() }}
       </span>
     </button>
 
@@ -96,11 +117,11 @@ onUnmounted(() => {
         <div
           class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-200 text-sm font-semibold"
         >
-          {{ user.name.substring(0, 2).toUpperCase() }}
+          {{ getInitials() }}
         </div>
         <div class="flex-1 text-sm">
-          <div class="font-semibold text-gray-900">{{ user.name }}</div>
-          <div class="text-xs text-gray-500">{{ user.email }}</div>
+          <div class="font-semibold text-gray-900">{{ getFullName() }}</div>
+          <div class="text-xs text-gray-500">{{ props.user.email }}</div>
         </div>
       </div>
 
