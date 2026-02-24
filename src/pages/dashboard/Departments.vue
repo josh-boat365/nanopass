@@ -7,7 +7,6 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  X,
 } from "lucide-vue-next";
 import BaseLayout from "@/layouts/AppLayout.vue";
 import apiClient from "@/services/apiClient";
@@ -31,7 +30,9 @@ const itemsPerPageOptions = [10, 25, 50, 100];
 
 // Form data
 const formData = ref({
-  department_name: "",
+  name: "",
+  description: "",
+  email: "",
 });
 
 // Fetch departments
@@ -60,8 +61,11 @@ const filteredDepartments = computed(() => {
     return departments.value;
   }
   const query = searchQuery.value.toLowerCase();
-  return departments.value.filter((dept) =>
-    dept.department_name?.toLowerCase().includes(query)
+  return departments.value.filter(
+    (dept) =>
+      dept.name?.toLowerCase().includes(query) ||
+      dept.description?.toLowerCase().includes(query) ||
+      dept.email?.toLowerCase().includes(query),
   );
 });
 
@@ -80,7 +84,7 @@ const paginationInfo = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value + 1;
   const end = Math.min(
     currentPage.value * itemsPerPage.value,
-    filteredDepartments.value.length
+    filteredDepartments.value.length,
   );
   return `${start}-${end} of ${filteredDepartments.value.length}`;
 });
@@ -115,25 +119,29 @@ const nextPage = () => {
 
 // Modal handlers
 const openAddModal = () => {
-  formData.value = { department_name: "" };
+  formData.value = { name: "", description: "", email: "" };
   showAddModal.value = true;
 };
 
 const closeAddModal = () => {
   showAddModal.value = false;
-  formData.value = { department_name: "" };
+  formData.value = { name: "", description: "", email: "" };
 };
 
 const openEditModal = (dept) => {
   selectedDepartment.value = dept;
-  formData.value = { department_name: dept.department_name };
+  formData.value = {
+    name: dept.name,
+    description: dept.description || "",
+    email: dept.email || "",
+  };
   showEditModal.value = true;
 };
 
 const closeEditModal = () => {
   showEditModal.value = false;
   selectedDepartment.value = null;
-  formData.value = { department_name: "" };
+  formData.value = { name: "", description: "", email: "" };
 };
 
 const openDeleteModal = (dept) => {
@@ -148,7 +156,7 @@ const closeDeleteModal = () => {
 
 // Add department
 const addDepartment = async () => {
-  if (!formData.value.department_name.trim()) {
+  if (!formData.value.name.trim()) {
     showError("Department name is required");
     return;
   }
@@ -156,7 +164,9 @@ const addDepartment = async () => {
   submitting.value = true;
   try {
     const response = await apiClient.post(API_ENDPOINTS.DEPARTMENTS.CREATE, {
-      department_name: formData.value.department_name,
+      name: formData.value.name,
+      description: formData.value.description,
+      email: formData.value.email,
     });
 
     departments.value.push(response.data.data);
@@ -172,7 +182,7 @@ const addDepartment = async () => {
 
 // Update department
 const updateDepartment = async () => {
-  if (!formData.value.department_name.trim()) {
+  if (!formData.value.name.trim()) {
     showError("Department name is required");
     return;
   }
@@ -182,12 +192,14 @@ const updateDepartment = async () => {
     const response = await apiClient.put(
       API_ENDPOINTS.DEPARTMENTS.UPDATE(selectedDepartment.value.id),
       {
-        department_name: formData.value.department_name,
-      }
+        name: formData.value.name,
+        description: formData.value.description,
+        email: formData.value.email,
+      },
     );
 
     const index = departments.value.findIndex(
-      (d) => d.id === selectedDepartment.value.id
+      (d) => d.id === selectedDepartment.value.id,
     );
     if (index !== -1) {
       departments.value[index] = response.data.data;
@@ -208,21 +220,18 @@ const deleteDepartment = async () => {
   submitting.value = true;
   try {
     await apiClient.delete(
-      API_ENDPOINTS.DEPARTMENTS.DELETE(selectedDepartment.value.id)
+      API_ENDPOINTS.DEPARTMENTS.DELETE(selectedDepartment.value.id),
     );
 
     departments.value = departments.value.filter(
-      (d) => d.id !== selectedDepartment.value.id
+      (d) => d.id !== selectedDepartment.value.id,
     );
 
     success("Department deleted successfully");
     closeDeleteModal();
   } catch (err) {
     console.error("❌ Error deleting department:", err);
-    showError(
-      err.response?.data?.message ||
-        "Failed to delete department. It may have associated users."
-    );
+    showError(err.response?.data?.message || "Failed to delete department");
   } finally {
     submitting.value = false;
   }
@@ -240,23 +249,20 @@ const deleteDepartment = async () => {
             Department Management
           </h1>
           <p class="text-gray-600 text-xs sm:text-sm mt-1">
-            Create, update, and manage departments.
+            View and manage all departments in the organization.
           </p>
         </div>
         <button
           @click="openAddModal"
-          class="inline-flex items-center gap-2 px-4 py-2 bg-black text-white text-xs sm:text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 whitespace-nowrap"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
         >
           <Plus class="h-4 w-4" />
-          Create Department
+          <span>Create Department</span>
         </button>
       </div>
 
       <!-- Loading State -->
-      <div
-        v-if="loading && !submitting"
-        class="flex items-center justify-center py-12"
-      >
+      <div v-if="loading" class="flex items-center justify-center py-12">
         <Loader2 class="h-8 w-8 animate-spin text-gray-400" />
         <span class="ml-2 text-gray-600">Loading departments...</span>
       </div>
@@ -295,11 +301,6 @@ const deleteDepartment = async () => {
                     Department
                   </th>
                   <th
-                    class="hidden sm:table-cell px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide"
-                  >
-                    Created
-                  </th>
-                  <th
                     class="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide"
                   >
                     Actions
@@ -316,19 +317,13 @@ const deleteDepartment = async () => {
                     class="px-4 sm:px-6 py-4 text-sm font-medium text-gray-900"
                   >
                     <div class="flex flex-col">
-                      <span>{{ dept.department_name }}</span>
+                      <span class="font-semibold">{{ dept.name }}</span>
+                      <span
+                        v-if="dept.description"
+                        class="text-xs text-gray-500"
+                        >{{ dept.description }}</span
+                      >
                     </div>
-                  </td>
-                  <td
-                    class="hidden sm:table-cell px-4 sm:px-6 py-4 text-sm text-gray-600"
-                  >
-                    {{
-                      new Date(dept.created_at).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })
-                    }}
                   </td>
                   <td class="px-4 sm:px-6 py-4 text-right">
                     <div class="flex items-center justify-end gap-1 sm:gap-2">
@@ -462,7 +457,7 @@ const deleteDepartment = async () => {
         </div>
       </template>
 
-      <!-- Add Modal -->
+      <!-- Add Department Modal -->
       <div
         v-if="showAddModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
@@ -491,10 +486,40 @@ const deleteDepartment = async () => {
               </label>
               <input
                 id="add-name"
-                v-model="formData.department_name"
+                v-model="formData.name"
                 type="text"
                 required
                 placeholder="Enter department name"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label
+                for="add-description"
+                class="block text-sm font-medium text-gray-900 mb-1"
+              >
+                Description
+              </label>
+              <textarea
+                id="add-description"
+                v-model="formData.description"
+                rows="3"
+                placeholder="Enter department description (optional)"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label
+                for="add-email"
+                class="block text-sm font-medium text-gray-900 mb-1"
+              >
+                Email
+              </label>
+              <input
+                id="add-email"
+                v-model="formData.email"
+                type="email"
+                placeholder="Enter department email (optional)"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
               />
             </div>
@@ -522,7 +547,7 @@ const deleteDepartment = async () => {
         </div>
       </div>
 
-      <!-- Edit Modal -->
+      <!-- Edit Department Modal -->
       <div
         v-if="showEditModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
@@ -549,10 +574,40 @@ const deleteDepartment = async () => {
               </label>
               <input
                 id="edit-name"
-                v-model="formData.department_name"
+                v-model="formData.name"
                 type="text"
                 required
                 placeholder="Enter department name"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label
+                for="edit-description"
+                class="block text-sm font-medium text-gray-900 mb-1"
+              >
+                Description
+              </label>
+              <textarea
+                id="edit-description"
+                v-model="formData.description"
+                rows="3"
+                placeholder="Enter department description (optional)"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label
+                for="edit-email"
+                class="block text-sm font-medium text-gray-900 mb-1"
+              >
+                Email
+              </label>
+              <input
+                id="edit-email"
+                v-model="formData.email"
+                type="email"
+                placeholder="Enter department email (optional)"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
               />
             </div>
@@ -583,9 +638,11 @@ const deleteDepartment = async () => {
       <!-- Delete Confirmation Modal -->
       <div
         v-if="showDeleteModal"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-2 sm:p-4"
       >
-        <div class="relative w-full max-w-md rounded-lg bg-white shadow-xl">
+        <div
+          class="relative w-full max-w-xs sm:max-w-md rounded-lg bg-white shadow-xl"
+        >
           <!-- Modal Header -->
           <div class="border-b px-4 sm:px-6 py-4">
             <h2 class="text-lg font-semibold text-gray-900">
@@ -597,16 +654,15 @@ const deleteDepartment = async () => {
           <div class="px-4 sm:px-6 py-4">
             <p class="text-xs sm:text-sm text-gray-600">
               Are you sure you want to delete
-              <span class="font-semibold text-gray-900">{{
-                selectedDepartment?.department_name
-              }}</span
+              <span class="font-semibold text-gray-900">
+                {{ selectedDepartment?.name }} </span
               >? This action cannot be undone.
             </p>
           </div>
 
           <!-- Modal Footer -->
           <div
-            class="border-t px-4 sm:px-6 py-4 flex gap-2 sm:gap-3 justify-end"
+            class="border-t px-2 sm:px-4 md:px-6 py-4 flex gap-2 sm:gap-3 justify-end flex-wrap"
           >
             <button
               @click="closeDeleteModal"
