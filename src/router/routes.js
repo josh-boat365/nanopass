@@ -202,30 +202,55 @@ const router = createRouter({
   routes
 });
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore();
   const isAuthenticated = userStore.isAuthenticated;
-  const isAdmin = userStore.isAdmin;
+
+  // Use local admin status - only verify on specific pages where needed
+  let isAdmin = userStore.isAdmin;
+
+  console.log('🔐 Route Guard:', {
+    to: to.path,
+    isAuthenticated,
+    isAdmin,
+    requiresAuth: to.meta.requiresAuth,
+    requiredRoles: to.meta.role
+  });
 
   // Check authentication requirement
   if (to.meta.requiresAuth && !isAuthenticated) {
+    console.log('❌ Not authenticated, redirecting to login');
     next("/login");
     return;
   }
 
   // Check role-based access
-  if (to.meta.role && !to.meta.role.includes(isAdmin ? 'admin' : 'user')) {
-    // Redirect unauthorized users to their dashboard
-    next(isAdmin ? "/admin/dashboard" : "/user/dashboard");
-    return;
+  if (to.meta.role) {
+    const userRole = isAdmin ? 'admin' : 'user';
+    const hasRequiredRole = to.meta.role.includes(userRole);
+
+    console.log('👤 Role check:', {
+      userRole,
+      requiredRoles: to.meta.role,
+      hasAccess: hasRequiredRole
+    });
+
+    if (!hasRequiredRole) {
+      console.log('❌ Insufficient permissions, redirecting');
+      // Redirect unauthorized users to their dashboard
+      next(isAdmin ? "/admin/dashboard" : "/user/dashboard");
+      return;
+    }
   }
 
   // Redirect authenticated users from guest pages
   if (to.meta.requiresGuest && isAuthenticated) {
+    console.log('⏭️ Already authenticated, skipping guest page');
     next(isAdmin ? "/admin/dashboard" : "/user/dashboard");
     return;
   }
 
+  console.log('✅ Route access granted');
   next();
 });
 
