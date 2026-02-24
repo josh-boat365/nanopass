@@ -54,7 +54,7 @@ const criticalSecurityIssues = computed(() => {
   let issues = 0;
   // Count expired passwords
   issues += passwordExpirations.value.filter(
-    (p) => p.status === "critical"
+    (p) => p.status === "critical",
   ).length;
   return issues;
 });
@@ -68,7 +68,7 @@ const inactiveUsersCount = computed(() => {
 const totalPermissionsGranted = computed(() => {
   return recentUsers.value.reduce(
     (sum, user) => sum + (user.permissions_count || 0),
-    0
+    0,
   );
 });
 
@@ -77,7 +77,7 @@ const avgPasswordsPerSystem = computed(() => {
   if (systemAccessOverview.value.length === 0) return 0;
   const total = systemAccessOverview.value.reduce(
     (sum, sys) => sum + (sys.password_count || 0),
-    0
+    0,
   );
   return Math.round(total / systemAccessOverview.value.length);
 });
@@ -97,7 +97,7 @@ const passwordExpirationStats = computed(() => {
 // System health status
 const systemHealthStatus = computed(() => {
   const healthyCount = systemAccessOverview.value.filter(
-    (s) => s.status === "healthy"
+    (s) => s.status === "healthy",
   ).length;
   const total = systemAccessOverview.value.length;
   return {
@@ -111,7 +111,7 @@ const systemHealthStatus = computed(() => {
 const userCompliancePercentage = computed(() => {
   if (recentUsers.value.length === 0) return 0;
   const usersWithPermissions = recentUsers.value.filter(
-    (u) => u && u.permissions_count && u.permissions_count > 0
+    (u) => u && u.permissions_count && u.permissions_count > 0,
   ).length;
   return Math.round((usersWithPermissions / recentUsers.value.length) * 100);
 });
@@ -121,7 +121,7 @@ const avgPolicyCompliance = computed(() => {
   if (passwordPolicies.value.length === 0) return 0;
   const total = passwordPolicies.value.reduce(
     (sum, p) => sum + (p.compliance || 0),
-    0
+    0,
   );
   return Math.round(total / passwordPolicies.value.length);
 });
@@ -130,7 +130,7 @@ const avgPolicyCompliance = computed(() => {
 const mostAccessedSystem = computed(() => {
   if (systemAccessOverview.value.length === 0) return null;
   return systemAccessOverview.value.reduce((max, sys) =>
-    (sys.activeUsers || 0) > (max.activeUsers || 0) ? sys : max
+    (sys.activeUsers || 0) > (max.activeUsers || 0) ? sys : max,
   );
 });
 
@@ -138,7 +138,7 @@ const mostAccessedSystem = computed(() => {
 const leastAccessedSystem = computed(() => {
   if (systemAccessOverview.value.length === 0) return null;
   return systemAccessOverview.value.reduce((min, sys) =>
-    (sys.activeUsers || 0) < (min.activeUsers || 0) ? sys : min
+    (sys.activeUsers || 0) < (min.activeUsers || 0) ? sys : min,
   );
 });
 
@@ -146,8 +146,23 @@ const leastAccessedSystem = computed(() => {
 const fetchDashboardData = async () => {
   loading.value = true;
   try {
+    // Check authentication first
+    if (!userStore.isAuthenticated) {
+      console.warn("User not authenticated, skipping dashboard data load");
+      showError("Please log in to view the dashboard");
+      loading.value = false;
+      return;
+    }
+
     // Fetch users
-    const usersData = await userStore.getAllUsers();
+    let usersData;
+    try {
+      usersData = await userStore.getAllUsers();
+    } catch (userErr) {
+      console.error("❌ Error fetching users:", userErr);
+      usersData = [];
+    }
+
     console.log("🔍 Users data received:", usersData);
     console.log("🔍 Users data type:", typeof usersData);
     console.log("🔍 Is array?:", Array.isArray(usersData));
@@ -172,7 +187,7 @@ const fetchDashboardData = async () => {
 
     // Calculate metrics
     const activeCount = recentUsers.value.filter(
-      (u) => u.status === "active"
+      (u) => u.status === "active",
     ).length;
     systemMetrics.value.totalUsers = recentUsers.value.length;
     systemMetrics.value.activeUsers = activeCount;
@@ -190,7 +205,7 @@ const fetchDashboardData = async () => {
         status: "healthy",
       }));
     } catch (systemErr) {
-      console.warn("Failed to fetch systems:", systemErr);
+      console.warn("❌ Failed to fetch systems:", systemErr);
       systemAccessOverview.value = [];
     }
 
@@ -206,14 +221,14 @@ const fetchDashboardData = async () => {
         compliance: policy.compliance_percentage || 100,
       }));
     } catch (policyErr) {
-      console.warn("Failed to fetch policies:", policyErr);
+      console.warn("❌ Failed to fetch policies:", policyErr);
       passwordPolicies.value = [];
     }
 
     // Fetch passwords to identify expiring ones
     try {
       const passwordsResponse = await apiClient.get(
-        API_ENDPOINTS.PASSWORDS.LIST
+        API_ENDPOINTS.PASSWORDS.LIST,
       );
       const passwordsData = passwordsResponse.data || passwordsResponse;
       const passwords = Array.isArray(passwordsData) ? passwordsData : [];
@@ -224,7 +239,7 @@ const fetchDashboardData = async () => {
         .slice(0, 5)
         .map((p) => {
           const expiresIn = Math.floor(
-            (new Date(p.expires_at) - new Date()) / (1000 * 60 * 60 * 24)
+            (new Date(p.expires_at) - new Date()) / (1000 * 60 * 60 * 24),
           );
           let status = "info";
           if (expiresIn <= 0) status = "critical";
@@ -241,16 +256,23 @@ const fetchDashboardData = async () => {
 
       // Calculate expired passwords
       systemMetrics.value.expiredPasswords = passwordExpirations.value.filter(
-        (p) => p.status === "critical"
+        (p) => p.status === "critical",
       ).length;
     } catch (passwordErr) {
-      console.warn("Failed to fetch passwords:", passwordErr);
+      console.warn("❌ Failed to fetch passwords:", passwordErr);
       passwordExpirations.value = [];
       systemMetrics.value.expiredPasswords = 0;
     }
+
+    console.log("✅ Dashboard data loaded successfully");
   } catch (err) {
-    console.error("Error fetching dashboard data:", err);
-    showError("Failed to load dashboard data");
+    console.error("❌ Error fetching dashboard data:", err);
+    // Only show error if it's not a redirect/401 issue
+    if (err.status !== 401) {
+      showError(
+        "Failed to load some dashboard data. Some sections may be empty.",
+      );
+    }
   } finally {
     loading.value = false;
   }
@@ -850,8 +872,8 @@ onMounted(() => {
                             expiration.status === "critical"
                               ? "Critical"
                               : expiration.status === "warning"
-                              ? "Warning"
-                              : "Info"
+                                ? "Warning"
+                                : "Info"
                           }}
                         </span>
                       </td>
