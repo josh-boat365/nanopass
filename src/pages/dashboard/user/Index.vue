@@ -1,6 +1,6 @@
 <script setup>
 import BaseLayout from "@/layouts/AppLayout.vue";
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import {
   Key,
   Clock,
@@ -13,28 +13,35 @@ import {
   ChevronRight,
   AlertCircle,
   Loader2,
+  RefreshCw,
 } from "lucide-vue-next";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useUserStore } from "@/stores/useUserStore";
 import apiClient from "@/services/apiClient";
 import { useToast } from "@/composables/useToast";
 
 const router = useRouter();
+const route = useRoute();
 const userStore = useUserStore();
 const { showError, success } = useToast();
 
 // Get reactive user data
 const { user, isAuthenticated, isAdmin } = storeToRefs(userStore);
 
-// User data
+// User data - display full name, email, and role
 const userData = ref({
-  name: user.value?.username || "NanoPass User",
-  email: user.value?.email || "testuser@nanopass.com",
+  name:
+    user.value?.firstName && user.value?.surname
+      ? `${user.value.firstName} ${user.value.surname}`
+      : user.value?.username || "NanoPass User",
+  email: user.value?.email || "user@nanopass.com",
+  role: user.value?.empRole || "Not specified",
 });
 
 // State management
 const loading = ref(true);
+const refreshing = ref(false);
 const personalKeys = ref([]);
 const assignedKeys = ref([]);
 const systems = ref([]);
@@ -45,7 +52,10 @@ const loadPersonalKeys = async () => {
     console.log("📥 Loading personal keys...");
     const response = await apiClient.get("/personal-keys");
 
-    personalKeys.value = response.data.data.map((key) => ({
+    const keysList = response.data.data || response.data || [];
+    console.log("📋 Personal keys from API:", keysList);
+
+    personalKeys.value = (keysList || []).map((key) => ({
       ...key,
       systemName: key.keyname,
       daysLeft: Infinity, // Personal keys don't expire
@@ -55,9 +65,14 @@ const loadPersonalKeys = async () => {
       hasExpiry: false, // Flag to indicate no expiration
     }));
 
-    console.log("✅ Personal keys loaded:", personalKeys.value);
+    console.log(
+      "✅ Personal keys loaded and mapped:",
+      personalKeys.value.length,
+      personalKeys.value,
+    );
   } catch (err) {
     console.error("❌ Error loading personal keys:", err);
+    personalKeys.value = [];
     showError(err.response?.data?.message || "Failed to load personal keys");
   }
 };
@@ -66,35 +81,83 @@ const loadPersonalKeys = async () => {
 const loadAssignedSystems = async () => {
   try {
     console.log("📥 Loading assigned systems...");
+    console.log("� Current user:", user.value);
     console.log("📊 Available systems for lookup:", systems.value);
 
     const response = await apiClient.get("/permissions");
     console.log("📥 Raw permissions data:", response.data.data);
+    console.log("📊 Raw permissions count:", response.data.data?.length);
 
-    // Filter permissions for current user and fetch system details
-    const userPermissions = response.data.data.filter(
-      (perm) => perm.user_id === user.value?.id,
-    );
-    console.log("🔍 Filtered user permissions:", userPermissions);
+    // The permissions endpoint should already return only this user's permissions
+    // No additional filtering needed - the backend filters by auth token
+    const permissions = response.data.data || [];
+    console.log("📋 Permissions to process:", permissions.length);
 
-    assignedKeys.value = userPermissions.map((perm) => {
-      const systemInfo = systems.value.find((sys) => sys.id === perm.system_id);
-      console.log(`Looking up system ${perm.system_id}:`, systemInfo);
-
-      return {
-        ...perm,
-        systemName: systemInfo?.name || `System ${perm.system_id}`,
-        description: systemInfo?.description || "System access",
-        daysLeft: calculateDaysLeft(perm.date_time_expiry),
-        status: calculateStatus(calculateDaysLeft(perm.date_time_expiry)),
-        assignedAt: perm.created_at,
-        assignedBy: "Administrator",
-        type: "assigned",
-        hasExpiry: true,
-      };
+    // Log each permission structure
+    permissions.forEach((perm, idx) => {
+      console.log(`Permission ${idx}:`, {
+        id: perm.id,
+        system_id: perm.system_id,
+        system_name: perm.system_name,
+        hasSystem: !!perm.system,
+      });
+    });
+    systems.value.forEach((sys, idx) => {
+      console.log(`System ${idx}:`, {
+        id: sys.id,
+        name: sys.name,
+        system_name: sys.system_name,
+      });
     });
 
-    console.log("✅ Assigned systems loaded:", assignedKeys.value);
+    assignedKeys.value = permissions
+      .filter((perm) => {
+        const daysLeft = calculateDaysLeft(perm.date_time_expiry);
+        if (daysLeft <= 0) {
+          console.log(`⏰ Permission ${perm.id} expired`);
+          return false;
+        }
+        return true;
+      })
+      .map((perm) => {
+        const systemInfo = systems.value.find(
+          (sys) => sys.id === perm.system_id,
+        );
+        const daysLeft = calculateDaysLeft(perm.date_time_expiry);
+
+        // Try multiple ways to get system name
+        let systemName = "Unknown System";
+        if (perm.system?.name) {
+          systemName = perm.system.name;
+        } else if (perm.system_name) {
+          systemName = perm.system_name;
+        } else if (systemInfo?.name) {
+          systemName = systemInfo.name;
+        } else if (systemInfo?.system_name) {
+          systemName = systemInfo.system_name;
+        }
+
+        console.log(
+          `Processing permission ${perm.id}: ${systemName}, Days=${daysLeft}`,
+        );
+
+        return {
+          ...perm,
+          systemName: systemName || `System ${perm.system_id}`,
+          daysLeft,
+          status: calculateStatus(daysLeft),
+          assignedAt: perm.created_at,
+          assignedBy: "Administrator",
+          type: "assigned",
+          hasExpiry: true,
+        };
+      });
+
+    console.log(
+      "✅ Assigned systems loaded:",
+      assignedKeys.value.length,
+      assignedKeys.value,
+    );
   } catch (err) {
     console.error("❌ Error loading assigned systems:", err);
     showError(err.response?.data?.message || "Failed to load assigned systems");
@@ -104,12 +167,13 @@ const loadAssignedSystems = async () => {
 // Load systems
 const loadSystems = async () => {
   try {
-    console.log("📥 Loading systems...");
+    console.log("📥 Loading systems list...");
     const response = await apiClient.get("/systems");
-    systems.value = response.data.data || [];
-    console.log("✅ Systems loaded:", systems.value);
+    systems.value = response.data.data || response.data || [];
+    console.log("✅ Systems loaded:", systems.value.length, systems.value);
   } catch (err) {
     console.error("❌ Error loading systems:", err);
+    systems.value = [];
   }
 };
 
@@ -132,12 +196,34 @@ const calculateStatus = (daysLeft) => {
   return "healthy";
 };
 
+// Refresh all data
+const refreshDashboard = async () => {
+  try {
+    refreshing.value = true;
+    console.log("🔄 Refreshing dashboard data...");
+
+    await loadSystems();
+    console.log("✓ Systems loaded, now loading keys...");
+
+    await Promise.all([loadPersonalKeys(), loadAssignedSystems()]);
+    console.log("✓ Personal and assigned keys loaded");
+
+    success("Dashboard updated successfully");
+    console.log("✅ Dashboard refresh complete");
+  } catch (err) {
+    console.error("❌ Error refreshing dashboard:", err);
+    showError("Failed to refresh dashboard");
+  } finally {
+    refreshing.value = false;
+  }
+};
+
 // Load all data on mount
 onMounted(async () => {
   try {
     loading.value = true;
-    await loadSystems();
-    await Promise.all([loadPersonalKeys(), loadAssignedSystems()]);
+    console.log("📱 Dashboard mounted, loading initial data...");
+    await refreshDashboard();
   } catch (err) {
     console.error("❌ Error loading dashboard data:", err);
     showError("Failed to load dashboard data");
@@ -146,10 +232,28 @@ onMounted(async () => {
   }
 });
 
+// Watch route and reload data when returning to dashboard
+// Watch BOTH the path and when component is activated
+watch(
+  () => route.path,
+  async (newPath) => {
+    console.log("🔄 Route changed to:", newPath);
+    if (newPath === "/user/dashboard") {
+      console.log("🔄 Dashboard path detected, refreshing...");
+      await refreshDashboard();
+    }
+  },
+);
+
 // Computed statistics
 const stats = computed(() => {
+  console.log("🔢 Calculating stats...");
+  console.log("📦 Personal keys:", personalKeys.value.length);
+  console.log("📦 Assigned keys:", assignedKeys.value.length);
+
   // Filter out expired assigned keys (daysLeft <= 0)
   const activeAssignedKeys = assignedKeys.value.filter((k) => k.daysLeft > 0);
+  console.log("✓ Active assigned keys:", activeAssignedKeys.length);
 
   const totalKeys = personalKeys.value.length + activeAssignedKeys.length;
   const allKeys = [...personalKeys.value, ...activeAssignedKeys];
@@ -157,6 +261,13 @@ const stats = computed(() => {
   const criticalKeys = allKeys.filter((k) => k.status === "critical").length;
   const warningKeys = allKeys.filter((k) => k.status === "warning").length;
   const healthyKeys = allKeys.filter((k) => k.status === "healthy").length;
+
+  console.log("📊 Stats calculated:", {
+    total: totalKeys,
+    critical: criticalKeys,
+    warning: warningKeys,
+    healthy: healthyKeys,
+  });
 
   return {
     total: totalKeys,
@@ -241,13 +352,28 @@ const formatDate = (dateString) => {
       <!-- Main Content -->
       <div v-else class="space-y-6">
         <!-- Welcome Header -->
-        <div class="mb-8">
-          <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
-            Welcome back, {{ userData.name }}
-          </h1>
-          <p class="mt-2 text-sm sm:text-base text-gray-600">
-            Here's an overview of your password management dashboard
-          </p>
+        <div
+          class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+        >
+          <div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
+              Welcome back, {{ userData.name }}
+            </h1>
+            <p class="mt-2 text-sm sm:text-base text-gray-600">
+              Here's an overview of your password management dashboard
+            </p>
+          </div>
+          <!-- Refresh Button -->
+          <button
+            @click="refreshDashboard"
+            :disabled="refreshing"
+            class="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-200 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            <RefreshCw :class="['h-4 w-4', refreshing ? 'animate-spin' : '']" />
+            <span class="text-sm font-medium">
+              {{ refreshing ? "Refreshing..." : "Refresh" }}
+            </span>
+          </button>
         </div>
 
         <!-- Stats Cards -->
@@ -529,9 +655,7 @@ const formatDate = (dateString) => {
                         Assigned Keys
                       </p>
                       <p class="text-xs text-gray-500">
-                        {{
-                          assignedKeys.filter((k) => k.daysLeft > 0).length
-                        }}
+                        {{ assignedKeys.filter((k) => k.daysLeft > 0).length }}
                         keys
                       </p>
                     </div>
