@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import apiClient from '@/services/apiClient'
 import { API_ENDPOINTS } from '@/config/apiConfig'
+import { sortNewestFirst } from '@/utils/listSort'
 
 export const usePasswordStore = defineStore('password', () => {
     // State
@@ -24,7 +25,7 @@ export const usePasswordStore = defineStore('password', () => {
         error.value = null
         try {
             const { data } = await apiClient.get(API_ENDPOINTS.PASSWORDS.LIST)
-            passwords.value = data.data || data || []
+            passwords.value = sortNewestFirst(data.data || data)
             return passwords.value
         } catch (err) {
             error.value = err.message || 'Failed to fetch passwords'

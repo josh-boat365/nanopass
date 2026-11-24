@@ -86,7 +86,7 @@ const closeDeleteModal = () => {
 // Add Privilege
 const addPrivilege = () => {
   if (formData.value.name.trim()) {
-    privileges.value.push({
+    privileges.value.unshift({
       id: Math.max(...privileges.value.map((p) => p.id), 0) + 1,
       name: formData.value.name,
       description: formData.value.description,

@@ -5,6 +5,11 @@ import BaseLayout from "@/layouts/AppLayout.vue";
 import apiClient from "@/services/apiClient";
 import { API_ENDPOINTS } from "@/config/apiConfig";
 import { useToast } from "@/composables/useToast";
+import { sortNewestFirst } from "@/utils/listSort";
+import {
+  generateRegex,
+  parseRequirementsFromRegex,
+} from "@/utils/passwordPolicy";
 
 const { success, error: showError } = useToast();
 
@@ -29,41 +34,6 @@ const formData = ref({
     requireSpecialChars: false,
   },
 });
-
-// Generate regex based on requirements
-const generateRegex = (requirements) => {
-  const {
-    minLength,
-    requireUppercase,
-    requireLowercase,
-    requireNumbers,
-    requireSpecialChars,
-  } = requirements;
-
-  let lookaheads = [];
-  let charClass = "A-Za-z\\d@$!%*?&";
-
-  // Build lookaheads based on requirements
-  if (requireUppercase) {
-    lookaheads.push("(?=.*[A-Z])");
-  }
-
-  if (requireLowercase) {
-    lookaheads.push("(?=.*[a-z])");
-  }
-
-  if (requireNumbers) {
-    lookaheads.push("(?=.*\\d)");
-  }
-
-  if (requireSpecialChars) {
-    lookaheads.push("(?=.*[@$!%*?&])");
-  }
-
-  // Combine lookaheads and length requirement
-  const lookaheadString = lookaheads.join("");
-  return `^${lookaheadString}[${charClass}]{${minLength},}$`;
-};
 
 // Generate human-readable description
 const generateDescription = (requirements) => {
@@ -141,17 +111,7 @@ const openEditModal = (policy) => {
   // Deep copy the policy data into formData
   formData.value = {
     name: policy.name || "",
-    requirements: JSON.parse(
-      JSON.stringify(
-        policy.requirements || {
-          minLength: 8,
-          requireUppercase: false,
-          requireLowercase: true,
-          requireNumbers: false,
-          requireSpecialChars: false,
-        }
-      )
-    ),
+    requirements: parseRequirementsFromRegex(policy.regex_text),
   };
   showEditModal.value = true;
 };
@@ -195,7 +155,7 @@ const addPasswordPolicy = async () => {
       policyData
     );
 
-    passwordPolicies.value.push(data);
+    passwordPolicies.value.unshift(data);
     updateFilteredPolicies();
     success("Password policy created successfully!");
     closeAddModal();
@@ -273,7 +233,7 @@ const loadPolicies = async () => {
     loading.value = true;
     const response = await apiClient.get(API_ENDPOINTS.POLICIES.LIST);
     const policiesData = response.data?.data || response.data;
-    passwordPolicies.value = Array.isArray(policiesData) ? policiesData : [];
+    passwordPolicies.value = sortNewestFirst(policiesData);
     updateFilteredPolicies();
   } catch (err) {
     console.error("Error loading policies:", err);

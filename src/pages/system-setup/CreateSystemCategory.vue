@@ -1,4 +1,5 @@
 <script setup>
+import { sortNewestFirst } from "@/utils/listSort";
 import { ref, computed, onMounted } from "vue";
 import {
   Trash2,
@@ -83,7 +84,7 @@ const loadPolicies = async () => {
   try {
     const response = await apiClient.get(API_ENDPOINTS.POLICIES.LIST);
     const policiesData = response.data?.data || response.data;
-    passwordPolicies.value = Array.isArray(policiesData) ? policiesData : [];
+    passwordPolicies.value = sortNewestFirst(policiesData);
   } catch (err) {
     console.error("Error loading policies:", err);
     showError("Failed to load policies");
@@ -96,13 +97,10 @@ const loadCategories = async () => {
     loading.value = true;
     const response = await apiClient.get(API_ENDPOINTS.CATEGORIES.LIST);
     const categoriesData = response.data?.data || response.data;
-    categories.value = Array.isArray(categoriesData)
-      ? categoriesData.map((category) => ({
-          ...category,
-          policy_name:
-            category.policy?.name || getPolicyName(category.policy_id),
-        }))
-      : [];
+    categories.value = sortNewestFirst(categoriesData).map((category) => ({
+      ...category,
+      policy_name: category.policy?.name || getPolicyName(category.policy_id),
+    }));
   } catch (err) {
     console.error("Error loading categories:", err);
     showError("Failed to load categories");

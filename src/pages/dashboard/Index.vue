@@ -1,4 +1,5 @@
 <script setup>
+import { sortNewestFirst } from "@/utils/listSort";
 import { ref, computed, onMounted } from "vue";
 import BaseLayout from "@/layouts/AppLayout.vue";
 import { useUserStore } from "@/stores/useUserStore";
@@ -180,7 +181,9 @@ const fetchDashboardData = async () => {
 
     console.log("🔍 Users array before filter:", usersArray);
 
-    recentUsers.value = usersArray.filter((u) => u && typeof u === "object");
+    recentUsers.value = sortNewestFirst(
+      usersArray.filter((u) => u && typeof u === "object"),
+    );
 
     console.log("📊 Filtered recent users:", recentUsers.value);
     console.log("📊 Total users count:", recentUsers.value.length);
@@ -196,7 +199,7 @@ const fetchDashboardData = async () => {
     try {
       const systemsResponse = await apiClient.get(API_ENDPOINTS.SYSTEMS.LIST);
       const systemsData = systemsResponse.data || systemsResponse;
-      const systems = Array.isArray(systemsData) ? systemsData : [];
+      const systems = sortNewestFirst(systemsData);
 
       systemAccessOverview.value = systems.map((system) => ({
         system: system.name || system.title || "Unknown System",
@@ -213,7 +216,7 @@ const fetchDashboardData = async () => {
     try {
       const policiesResponse = await apiClient.get(API_ENDPOINTS.POLICIES.LIST);
       const policiesData = policiesResponse.data || policiesResponse;
-      const policies = Array.isArray(policiesData) ? policiesData : [];
+      const policies = sortNewestFirst(policiesData);
 
       passwordPolicies.value = policies.map((policy) => ({
         name: policy.name || policy.title || "Unknown Policy",

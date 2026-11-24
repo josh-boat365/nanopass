@@ -3,6 +3,7 @@
 import { ref, computed } from 'vue'
 import apiClient from '@/services/apiClient'
 import { API_ENDPOINTS } from '@/config/apiConfig'
+import { sortNewestFirst } from '@/utils/listSort'
 
 export const useAuditTrails = () => {
   // State
@@ -59,7 +60,7 @@ export const useAuditTrails = () => {
 
       const response = await apiClient.get(url)
 
-      auditTrails.value = response.data?.data || []
+      auditTrails.value = sortNewestFirst(response.data?.data)
       pagination.value = response.data?.pagination || {
         total: auditTrails.value.length,
         per_page: filters.value.per_page,

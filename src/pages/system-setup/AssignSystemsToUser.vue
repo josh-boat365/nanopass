@@ -1,4 +1,5 @@
 <script setup>
+import { sortNewestFirst } from "@/utils/listSort";
 import { ref, computed, onMounted } from "vue";
 import {
   Trash2,
@@ -400,7 +401,7 @@ const loadUsers = async () => {
     console.log("📥 Loading users from:", endpoint);
     const response = await apiClient.get(endpoint);
     const data = response.data.data || response.data || [];
-    users.value = Array.isArray(data) ? data : [];
+    users.value = sortNewestFirst(data);
     console.log("✅ Users loaded:", users.value.length, "users");
     return users.value;
   } catch (err) {
@@ -420,7 +421,7 @@ const loadSystems = async () => {
     console.log("📥 Loading systems from:", API_ENDPOINTS.SYSTEMS.LIST);
     const response = await apiClient.get(API_ENDPOINTS.SYSTEMS.LIST);
     const data = response.data.data || response.data || [];
-    systems.value = Array.isArray(data) ? data : [];
+    systems.value = sortNewestFirst(data);
     console.log("✅ Systems loaded:", systems.value.length, "systems");
     return systems.value;
   } catch (err) {
@@ -441,7 +442,7 @@ const loadPermissions = async () => {
     console.log("📥 Loading permissions from:", endpoint);
     const response = await apiClient.get(endpoint);
     const data = response.data.data || response.data || [];
-    permissions.value = Array.isArray(data) ? data : [];
+    permissions.value = sortNewestFirst(data);
     console.log(
       "✅ Permissions loaded:",
       permissions.value.length,

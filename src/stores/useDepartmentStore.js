@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import apiClient from '@/services/apiClient'
 import { API_ENDPOINTS } from '@/config/apiConfig'
+import { sortNewestFirst } from '@/utils/listSort'
 
 export const useDepartmentStore = defineStore('department', () => {
     // State
@@ -23,7 +24,7 @@ export const useDepartmentStore = defineStore('department', () => {
         error.value = null
         try {
             const { data } = await apiClient.get(API_ENDPOINTS.DEPARTMENTS.LIST)
-            departments.value = data.data || data || []
+            departments.value = sortNewestFirst(data.data || data)
             return departments.value
         } catch (err) {
             error.value = err.message || 'Failed to fetch departments'
@@ -74,7 +75,7 @@ export const useDepartmentStore = defineStore('department', () => {
         try {
             const { data } = await apiClient.post(API_ENDPOINTS.DEPARTMENTS.CREATE, departmentData)
             const newDepartment = data.data || data
-            departments.value.push(newDepartment)
+            departments.value.unshift(newDepartment)
             return newDepartment
         } catch (err) {
             error.value = err.message || 'Failed to create department'

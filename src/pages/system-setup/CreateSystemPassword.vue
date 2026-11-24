@@ -17,6 +17,8 @@ import BaseLayout from "@/layouts/AppLayout.vue";
 import apiClient from "@/services/apiClient";
 import { API_ENDPOINTS } from "@/config/apiConfig";
 import { useToast } from "@/composables/useToast";
+import { effectiveRegex } from "@/utils/passwordPolicy";
+import { sortNewestFirst } from "@/utils/listSort";
 
 const { success, error: showError } = useToast();
 
@@ -72,7 +74,7 @@ const filteredPasswords = computed(() => {
     (pwd) =>
       pwd.title?.toLowerCase().includes(query) ||
       pwd.username?.toLowerCase().includes(query) ||
-      (pwd.system_name && pwd.system_name.toLowerCase().includes(query))
+      getPasswordSystemName(pwd).toLowerCase().includes(query)
   );
 });
 
@@ -133,7 +135,8 @@ const parsePolicyFromRegex = (policy) => {
   return {
     name: policy.name,
     description: policy.description,
-    regex: policy.regex_text,
+    // Rebuild the pattern from the policy's requirements so older stored patterns are enforced correctly
+    regex: effectiveRegex(policy.regex_text),
   };
 };
 
@@ -156,6 +159,11 @@ const getSystemNameById = (systemId) => {
   const system = systems.value.find((s) => s.id === systemId);
   return system ? system.system_name : "Unknown System";
 };
+
+// Resolve a password's system name at render time, so it is correct
+// even when the systems list finishes loading after the passwords
+const getPasswordSystemName = (pwd) =>
+  pwd.system?.system_name || getSystemNameById(pwd.system_id);
 
 // ========================================
 // VALIDATION FUNCTIONS
@@ -371,13 +379,24 @@ const loadCategories = async () => {
   try {
     const response = await apiClient.get(API_ENDPOINTS.CATEGORIES.LIST);
     const categoriesData = response.data?.data || response.data;
-    categories.value = Array.isArray(categoriesData) ? categoriesData : [];
+    categories.value = sortNewestFirst(categoriesData);
     console.log("✅ Loaded categories with policies:", categories.value.length);
   } catch (err) {
     console.error("❌ Error loading categories:", err);
     showError("Failed to load categories");
   }
 };
+
+// System picker search (used by the add and edit modals)
+const systemSearch = ref("");
+const filteredSystemOptions = computed(() => {
+  const query = systemSearch.value.trim().toLowerCase();
+  const list = sortNewestFirst(systems.value);
+  if (!query) return list;
+  return list.filter((s) =>
+    (s.system_name || "").toLowerCase().includes(query)
+  );
+});
 
 // Load systems with relationships
 const loadSystems = async () => {
@@ -386,7 +405,7 @@ const loadSystems = async () => {
     const response = await apiClient.get(API_ENDPOINTS.SYSTEMS.LIST);
     const systemsData = response.data?.data || response.data;
 
-    systems.value = Array.isArray(systemsData) ? systemsData : [];
+    systems.value = sortNewestFirst(systemsData);
 
     console.log("✅ Loaded systems:", systems.value.length);
     if (systems.value.length > 0) {
@@ -406,13 +425,7 @@ const loadPasswords = async () => {
     loading.value = true;
     const response = await apiClient.get(API_ENDPOINTS.PASSWORDS.LIST);
     const passwordsData = response.data?.data || response.data;
-    passwords.value = Array.isArray(passwordsData)
-      ? passwordsData.map((pwd) => ({
-          ...pwd,
-          system_name:
-            pwd.system?.system_name || getSystemNameById(pwd.system_id),
-        }))
-      : [];
+    passwords.value = sortNewestFirst(passwordsData);
     console.log("✅ Loaded passwords:", passwords.value.length);
   } catch (err) {
     console.error("❌ Error loading passwords:", err);
@@ -441,6 +454,7 @@ const openAddModal = () => {
   selectedPolicy.value = null;
   policyRequirements.value = null;
   policyValidation.value = { isValid: false, errors: [], checked: false };
+  systemSearch.value = "";
   showAddModal.value = true;
 };
 
@@ -477,6 +491,7 @@ const openEditModal = (password) => {
   // The system watcher will handle loading the policy
   // Start with valid state for edit mode (empty password is OK)
   policyValidation.value = { isValid: true, errors: [], checked: false };
+  systemSearch.value = "";
   showEditModal.value = true;
 };
 
@@ -850,7 +865,7 @@ onMounted(() => {
                   <span
                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                   >
-                    {{ password.system_name }}
+                    {{ getPasswordSystemName(password) }}
                   </span>
                 </td>
                 <td class="px-6 py-4 text-sm">
@@ -1023,6 +1038,13 @@ onMounted(() => {
               >
                 System <span class="text-red-600">*</span>
               </label>
+              <input
+                v-model="systemSearch"
+                type="text"
+                placeholder="Search systems..."
+                aria-label="Search systems"
+                class="w-full mb-2 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
               <select
                 id="add-system"
                 v-model.number="formData.system_id"
@@ -1030,11 +1052,18 @@ onMounted(() => {
               >
                 <option :value="null" disabled>Select a system</option>
                 <option
-                  v-for="system in systems"
+                  v-for="system in filteredSystemOptions"
                   :key="system.id"
                   :value="system.id"
                 >
                   {{ system.system_name }}
+                </option>
+                <option
+                  v-if="filteredSystemOptions.length === 0"
+                  disabled
+                  :value="undefined"
+                >
+                  No matching systems
                 </option>
               </select>
             </div>
@@ -1306,6 +1335,13 @@ onMounted(() => {
               >
                 System <span class="text-red-600">*</span>
               </label>
+              <input
+                v-model="systemSearch"
+                type="text"
+                placeholder="Search systems..."
+                aria-label="Search systems"
+                class="w-full mb-2 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              />
               <select
                 id="edit-system"
                 v-model.number="formData.system_id"
@@ -1313,11 +1349,18 @@ onMounted(() => {
               >
                 <option :value="null" disabled>Select a system</option>
                 <option
-                  v-for="system in systems"
+                  v-for="system in filteredSystemOptions"
                   :key="system.id"
                   :value="system.id"
                 >
                   {{ system.system_name }}
+                </option>
+                <option
+                  v-if="filteredSystemOptions.length === 0"
+                  disabled
+                  :value="undefined"
+                >
+                  No matching systems
                 </option>
               </select>
             </div>
