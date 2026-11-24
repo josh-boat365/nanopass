@@ -1,4 +1,5 @@
 <script setup>
+import { sortNewestFirst } from "@/utils/listSort";
 // ========================================
 // IMPORTS & INITIALIZATION
 // ========================================
@@ -334,7 +335,7 @@ const loadPermissions = async () => {
     console.log("📥 Loading permissions...");
     const endpoint = API_ENDPOINTS.PERMISSIONS?.LIST || "/permissions";
     const response = await apiClient.get(endpoint);
-    permissions.value = response.data.data || response.data || [];
+    permissions.value = sortNewestFirst(response.data.data || response.data);
     console.log("✅ Permissions loaded:", permissions.value.length);
   } catch (err) {
     console.error("❌ Error loading permissions:", err);
@@ -346,7 +347,7 @@ const loadSystems = async () => {
   try {
     console.log("📥 Loading systems...");
     const response = await apiClient.get(API_ENDPOINTS.SYSTEMS.LIST);
-    systems.value = response.data.data || response.data || [];
+    systems.value = sortNewestFirst(response.data.data || response.data);
     console.log("✅ Systems loaded:", systems.value.length);
   } catch (err) {
     console.error("❌ Error loading systems:", err);

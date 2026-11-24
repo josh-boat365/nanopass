@@ -1,4 +1,5 @@
 <script setup>
+import { sortNewestFirst } from "@/utils/listSort";
 import BaseLayout from "@/layouts/AppLayout.vue";
 import { ref, computed, onMounted, watch } from "vue";
 import {
@@ -55,7 +56,7 @@ const loadPersonalKeys = async () => {
     const keysList = response.data.data || response.data || [];
     console.log("📋 Personal keys from API:", keysList);
 
-    personalKeys.value = (keysList || []).map((key) => ({
+    personalKeys.value = sortNewestFirst(keysList).map((key) => ({
       ...key,
       systemName: key.keyname,
       daysLeft: Infinity, // Personal keys don't expire
@@ -169,7 +170,7 @@ const loadSystems = async () => {
   try {
     console.log("📥 Loading systems list...");
     const response = await apiClient.get("/systems");
-    systems.value = response.data.data || response.data || [];
+    systems.value = sortNewestFirst(response.data.data || response.data);
     console.log("✅ Systems loaded:", systems.value.length, systems.value);
   } catch (err) {
     console.error("❌ Error loading systems:", err);

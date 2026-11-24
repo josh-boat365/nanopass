@@ -1,4 +1,5 @@
 <script setup>
+import { sortNewestFirst } from "@/utils/listSort";
 import { ref, reactive, computed, onMounted } from "vue";
 import BaseLayout from "@/layouts/AppLayout.vue";
 import {
@@ -175,7 +176,7 @@ const loadRevocationHistory = async () => {
       per_page: 1000, // Load all for client-side filtering
     });
 
-    revocationHistory.value = response.data || [];
+    revocationHistory.value = sortNewestFirst(response.data);
     if (response.pagination) {
       pagination.total = response.pagination.total || 0;
       pagination.page = 1;

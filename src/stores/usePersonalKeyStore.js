@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import apiClient from '@/services/apiClient'
 import { API_ENDPOINTS } from '@/config/apiConfig'
+import { sortNewestFirst } from '@/utils/listSort'
 
 export const usePersonalKeyStore = defineStore('personalKey', () => {
     // State
@@ -30,7 +31,7 @@ export const usePersonalKeyStore = defineStore('personalKey', () => {
             const endpoint = `${API_ENDPOINTS.PERSONAL_KEYS.LIST}?page=${page}`
             const { data } = await apiClient.get(endpoint)
 
-            personalKeys.value = data.data || data || []
+            personalKeys.value = sortNewestFirst(data.data || data)
 
             // Handle pagination if available
             if (data.pagination) {

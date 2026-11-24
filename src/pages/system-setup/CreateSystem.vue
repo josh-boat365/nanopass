@@ -1,4 +1,5 @@
 <script setup>
+import { sortNewestFirst } from "@/utils/listSort";
 import { ref, computed, onMounted } from "vue";
 import {
   Trash2,
@@ -81,7 +82,7 @@ const loadCategories = async () => {
   try {
     const response = await apiClient.get(API_ENDPOINTS.CATEGORIES.LIST);
     const categoriesData = response.data?.data || response.data;
-    categories.value = Array.isArray(categoriesData) ? categoriesData : [];
+    categories.value = sortNewestFirst(categoriesData);
   } catch (err) {
     console.error("Error loading categories:", err);
     showError("Failed to load categories");
@@ -94,13 +95,11 @@ const loadSystems = async () => {
     loading.value = true;
     const response = await apiClient.get(API_ENDPOINTS.SYSTEMS.LIST);
     const systemsData = response.data?.data || response.data;
-    systems.value = Array.isArray(systemsData)
-      ? systemsData.map((system) => ({
-          ...system,
-          category_name:
-            system.category?.name || getCategoryName(system.category_id),
-        }))
-      : [];
+    systems.value = sortNewestFirst(systemsData).map((system) => ({
+      ...system,
+      category_name:
+        system.category?.name || getCategoryName(system.category_id),
+    }));
   } catch (err) {
     console.error("Error loading systems:", err);
     showError("Failed to load systems");

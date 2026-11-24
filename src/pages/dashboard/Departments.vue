@@ -12,6 +12,7 @@ import BaseLayout from "@/layouts/AppLayout.vue";
 import apiClient from "@/services/apiClient";
 import { API_ENDPOINTS } from "@/config/apiConfig";
 import { useToast } from "@/composables/useToast";
+import { sortNewestFirst } from "@/utils/listSort";
 
 const { success, error: showError } = useToast();
 
@@ -40,7 +41,7 @@ const fetchDepartments = async () => {
   loading.value = true;
   try {
     const response = await apiClient.get(API_ENDPOINTS.DEPARTMENTS.LIST);
-    departments.value = response.data.data || [];
+    departments.value = sortNewestFirst(response.data.data);
     console.log("📊 Departments loaded:", departments.value);
   } catch (err) {
     console.error("❌ Error fetching departments:", err);
@@ -169,7 +170,7 @@ const addDepartment = async () => {
       email: formData.value.email,
     });
 
-    departments.value.push(response.data.data);
+    departments.value.unshift(response.data.data);
     success("Department created successfully");
     closeAddModal();
   } catch (err) {

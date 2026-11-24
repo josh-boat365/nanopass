@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import apiClient from '@/services/apiClient'
 import { API_ENDPOINTS } from '@/config/apiConfig'
+import { sortNewestFirst } from '@/utils/listSort'
 
 export const useUserStore = defineStore('user', () => {
     // State
@@ -120,7 +121,7 @@ export const useUserStore = defineStore('user', () => {
         try {
             const { data } = await apiClient.get(API_ENDPOINTS.USERS.LIST, { params })
             // Extract users array from response { data: [...], pagination: {...} }
-            users.value = data.data || []
+            users.value = sortNewestFirst(data.data)
             return data
         } catch (err) {
             error.value = err.message || 'Failed to fetch users'

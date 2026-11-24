@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import apiClient from '@/services/apiClient'
 import { API_ENDPOINTS } from '@/config/apiConfig'
+import { sortNewestFirst } from '@/utils/listSort'
 
 export const useDescriptionStore = defineStore('description', () => {
     // State
@@ -22,7 +23,7 @@ export const useDescriptionStore = defineStore('description', () => {
         error.value = null
         try {
             const { data } = await apiClient.get(API_ENDPOINTS.DESCRIPTIONS.LIST)
-            descriptions.value = data.data || data || []
+            descriptions.value = sortNewestFirst(data.data || data)
             return descriptions.value
         } catch (err) {
             error.value = err.message || 'Failed to fetch descriptions'
@@ -72,7 +73,7 @@ export const useDescriptionStore = defineStore('description', () => {
         try {
             const { data } = await apiClient.post(API_ENDPOINTS.DESCRIPTIONS.CREATE, descriptionData)
             const newDescription = data.data || data
-            descriptions.value.push(newDescription)
+            descriptions.value.unshift(newDescription)
             return newDescription
         } catch (err) {
             error.value = err.message || 'Failed to create description'
